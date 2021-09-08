@@ -1,0 +1,21 @@
+BIOL 0200, 0210, minimum score of 4 in 'AP Biology', minimum score of 30 in 'BIOL Placement Test Min.Score' or minimum score of 5 in 'IB HL Biology'
+CSCI 0190, 0112, 0160 or 0180
+CSCI 0111, 0150 or 0170
+CSCI 0220, 1450, 0450, APMA 1650, 1655 or MATH 1610
+CSCI 0310 or 0330
+ENVS 0490 or minimum score of 4 in 'AP Environmental Science'
+HISP 0200, 0110 or minimum score of 460 in 'SATSubj-Spanish'
+HISP 0400, minimum score of 4 in 'SATSubj-Spanish' or minimum score of 491 in 'Spanish Placement', minimum score of 4 in 'AP Spanish Language' or minimum score of 4 in 'AP Spanish Literature'
+MATH 0050 or 0060
+MATH 0090, 0100, 0170 or minimum score of 4 in 'AP Calculus BC'
+MATH 0180, 0200, 0190 or 0350
+MATH 0520, 0540, APMA 1170, CSCI 0530 or PHYS 0720
+APMA 0350 or MATH 1110
+MATH 2050 or 2060
+MATH 2210 or 2220
+MATH 2510 or 2520
+MATH 2530 or 2540
+CHIN 0600 or 0450
+RUSS 0350 or 0400
+ECON 1110 or 1130
+PHYS 0030, 0040, 0050 or 0070

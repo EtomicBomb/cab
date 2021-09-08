@@ -1,0 +1,103 @@
+AFRI;Africana Studies;culture;000075
+SIGN;American Sign Language;language;dcbeff
+AMST;American Studies;culture;000075
+AMCV;American Civilization;culture;000075
+ANTH;Anthropology;other;ffe119
+APMA;Applied Mathematics;other;ffe119
+ARAB;Arabic;language;dcbeff
+ARCH;Archaeology and Ancient World;culture;000075
+ASYR;Assyriology;culture;000075
+AWAS;Ancient Western Asian Studies;culture;000075
+BHBR;Biblical Hebrew;language;dcbeff
+BIOL;Biology;physical science;3cb44b
+PHP;Biomedicine-Community Health;physical science;3cb44b
+NEUR;Biomedicine-Neuroscience;physical science;3cb44b
+ARTS;Brown Arts Initiative;other;ffe119
+BEO;Business, Entrepreneurship and Organization;other;ffe119
+CATL;Catalan;language;dcbeff
+CHEM;Chemistry;physical science;3cb44b
+CHIN;Chinese;language;dcbeff
+CLAS;Classics;other;ffe119
+CLPS;Cognitive, Linguistic, Psychological Sciences;physical science;3cb44b
+COGS;Cognitive Sciences;physical science;3cb44b
+COLT;Comparative Literature;other;ffe119
+CSCI;Computer Science;abstract science;800000
+COST;Contemplative Studies;other;ffe119
+CZCH;Czech;language;dcbeff
+DATA;Data Science;abstract science;800000
+DEVL;Development Studies;other;ffe119
+ERLY;Early Cultures;culture;000075
+EMOW;Early Modern World;culture;000075
+EEPS;Earth, Environmental and Planetary Sciences;physical science;3cb44b
+EAST;East Asian Studies;culture;000075
+ECON;Economics;physical science;3cb44b
+EDUC;Education;other;ffe119
+EGYT;Egyptology;culture;000075
+ENGN;Engineering;physical science;3cb44b
+ENGL;English;other;ffe119
+EINT;English for Internationals;language;dcbeff
+ENVS;Environmental Studies;physical science;3cb44b
+ETHN;Ethnic Studies;culture;000075
+FREN;French Studies;language;dcbeff
+GNSS;Gender and Sexuality Studies;other;ffe119
+GEOL;Geological Sciences;physical science;3cb44b
+GRMN;German Studies;language;dcbeff
+GLSP;Global Independent Study Project;other;ffe119
+GREK;Greek;language;dcbeff;language;dcbeff
+GISP;Group Independent Studies;other;ffe119
+HCL;Healthcare Leadership;other;ffe119
+HEBR;Hebrew;language;dcbeff
+HNDI;Hindi-Urdu;language;dcbeff
+HISP;Hispanic Studies;culture;000075
+HIST;History;other;ffe119
+HIAA;History of Art and Architecture;other;ffe119
+HMAN;Humanities;other;ffe119
+INDP;Independent Studies;other;ffe119
+IAPA;International and Public Affairs;other;ffe119
+INTL;International and Public Affairs;other;ffe119
+INTR;Internship;other;ffe119
+ITAL;Italian Studies;language;dcbeff
+JAPN;Japanese;language;dcbeff
+JUDS;Judaic Studies;culture;000075
+KREA;Korean;language;dcbeff
+LANG;Language Studies;language;dcbeff
+LATN;Latin;language;dcbeff
+LACA;Latin American and Caribbean Studies;culture;000075
+LING;Linguistics;physical science;3cb44b
+LITR;Literary Arts;other;ffe119
+MATH;Mathematics;abstract science;800000
+MED;Medical Education;other;ffe119
+MDVL;Medieval Studies;culture;000075
+MES;Middle East Studies;culture;000075
+MCM;Modern Culture and Media;culture;000075
+MGRK;Modern Greek;language;dcbeff
+MPA;Public Affairs;other;ffe119
+MUSC;Music;other;ffe119
+NAHU;Nahuatl;language;dcbeff
+PRSN;Persian;language;dcbeff
+PHIL;Philosophy;physical science;3cb44b
+PHYS;Physics;physical science;3cb44b
+PLSH;Polish;language;dcbeff
+POLS;Political Science;other;ffe119
+POBS;Portuguese and Brazilian Studies;language;dcbeff
+PLME;Program in Liberal Medical Education;physical science;3cb44b
+PHUM;Public Humanities;other;ffe119
+PLCY;Public Policy;other;ffe119
+PSYC;Psychological Sciences;physical science;3cb44b
+RELS;Religious Studies;other;ffe119
+REMS;Renaissance and Early Modern Studies;culture;000075
+RUSS;Russian;language;dcbeff
+SANS;Sanskrit;language;dcbeff
+SCSO;Science and Society;physical science;3cb44b
+STS;Science, Technology and Society;physical science;3cb44b
+SLAV;Slavic;language;dcbeff
+SOC;Sociology;physical science;3cb44b
+SAST;South Asian Studies;culture;000075
+SWED;Swedish;language;dcbeff
+TAPS;Theatre Arts and Performance Studies;other;ffe119
+TKSH;Turkish;language;dcbeff
+TSDA;Theatre, Speech and Dance;other;ffe119
+UNIV;University Courses;other;ffe119
+URBN;Urban Studies;other;ffe119
+VISA;Visual Art;other;ffe119
+YORU;Yoruba;language;dcbeff
