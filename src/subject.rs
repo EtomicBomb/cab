@@ -1,13 +1,9 @@
-
 use std::str::FromStr;
 use std::fmt::{Write, Formatter};
 use std::fmt;
 use once_cell::sync::Lazy;
 use std::io::{BufReader, BufRead};
 use std::fs::File;
-use std::num::NonZeroU8;
-use std::convert::TryInto;
-use std::collections::HashMap;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Subject {

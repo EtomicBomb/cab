@@ -1,5 +1,5 @@
 BIOL 0200, 0210, minimum score of 4 in 'AP Biology', minimum score of 30 in 'BIOL Placement Test Min.Score' or minimum score of 5 in 'IB HL Biology'
-CSCI 0190, 0112, 0160 or 0180
+CSCI 0190, 0112, 0160, 0180 or 0200
 CSCI 0111, 0150 or 0170
 CSCI 0220, 1450, 0450, APMA 1650, 1655 or MATH 1610
 CSCI 0310 or 0330

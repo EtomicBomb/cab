@@ -57,7 +57,6 @@ fn scrape_course_stubs() -> io::Result<Json> {
             io::ErrorKind::InvalidData,
             format!("C@B returned invalid json: {}", result)
         ))
-
 }
 
 fn course_details(course_code: CourseCode, crn: u32) -> io::Result<String> {
@@ -96,7 +95,6 @@ fn make_request(request: &[u8], url: &str) -> io::Result<String> {
             io::ErrorKind::InvalidData,
             format!("C@B returned invalid utf8")
         ))
-
 }
 
 fn percent_encode(string: &str) -> String {

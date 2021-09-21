@@ -4,14 +4,12 @@ use crate::json::Json;
 use std::fmt;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Formatter, Write};
-use std::borrow::Borrow;
 use std::str::FromStr;
 use std::io::{BufReader, BufRead};
 use std::fs::File;
 use crate::subject::{Subject, Subjects};
-use std::cmp::Ordering;
 use crate::normalize::normalize;
-use crate::parse_prerequisite_string::{parse_prerequisite_string, PrerequisiteStringError};
+use crate::parse_prerequisite_string::{parse_prerequisite_string};
 use std::iter::Sum;
 use std::ops::Add;
 

@@ -1,9 +1,9 @@
 use std::ops::{Index, IndexMut};
-use std::collections::HashMap;
-use crate::restrictions::{CourseCode, RegistrationRestrictions, Qualification, PrerequisiteTree, Conjunctive};
+use crate::restrictions::{Qualification, PrerequisiteTree, Conjunctive};
 use std::fmt::{self, Write, Formatter};
 use crate::subject::{Subject, Subjects};
 use crate::AllRestrictions;
+use rand::{thread_rng, Rng};
 
 pub struct SubjectGraphs {
     subject_graphs: Vec<SubjectGraph>,
@@ -115,10 +115,16 @@ impl SubjectGraph {
         })
     }
 
+    fn is_singlet(&self, node_index: NodeIndex) -> bool {
+        self[node_index].dependencies.is_empty()
+            && self.nodes.iter().all(|o| !o.dependencies.contains(&node_index))
+    }
+
     pub fn graphviz_cluster(&self, string: &mut String) {
         let abbreviation = Subjects::all().abbreviation(self.subject);
         writeln!(string, "subgraph cluster_{} {{", abbreviation).unwrap();
         writeln!(string, "packmode=\"graph\"").unwrap();
+        writeln!(string, "label=\"{}\"", Subjects::all().name(self.subject)).unwrap();
 
         let color = Subjects::all().color(self.subject);
         writeln!(string, "bgcolor=\"#{}\"", color).unwrap();
@@ -129,13 +135,32 @@ impl SubjectGraph {
                     writeln!(string, "{} [label=\"{}\",shape=box,color=blue]", node.id, q).unwrap();
                 }
                 NodeKind::Qualification(Qualification::Course(code)) => {
-                    writeln!(string, "{} [label=\"{}\",shape=box]", node.id, code).unwrap();
+                    writeln!(string, "{} [label=\"\",shape=box, fixedsize=true, width=1.4, height=0.6, class=\"qual_{}\"]", node.id, code).unwrap();
                 }
                 NodeKind::Conjunctive(conjunctive) => {
                     writeln!(string, "{} [label={}]", node.id, conjunctive).unwrap();
                 }
             }
+        }
 
+        let (singlets, others): (Vec<_>, Vec<_>) = self.iter()
+            .partition(|&(i, _)| self.is_singlet(i));
+
+        let singlets_sqrt = integer_square_root(singlets.len() as u64) as usize + 1;
+
+
+        writeln!(string, "subgraph cluster{} {{\nstyle=\"invis\"", thread_rng().gen::<u32>()).unwrap();
+
+        for (i, pair) in singlets.windows(2).enumerate() {
+            if i % singlets_sqrt != 0 {
+                writeln!(string, "{} -> {} [style=\"invis\"]", pair[0].1.id, pair[1].1.id).unwrap();
+            }
+        }
+
+        writeln!(string, "}}").unwrap();
+
+
+        for (_, node) in others {
             for &dependency in node.dependencies() {
                 let dependency = &self[dependency];
                 writeln!(string, "{} -> {}", dependency.id, node.id).unwrap();
@@ -219,166 +244,19 @@ impl fmt::Debug for NodeIndex {
     }
 }
 
-// #[derive(Debug, Clone)]
-// pub struct Graph {
-//     pub nodes: Vec<Node>,
-// }
-//
-// impl Graph {
-//     pub fn empty() -> Graph {
-//         Graph { nodes: Vec::new() }
-//     }
-//
-//     pub fn iter(&self) -> impl Iterator<Item=(NodeIndex, &Node)> {
-//         self.nodes.iter().enumerate().map(|(i, node)| (NodeIndex(i), node))
-//     }
-//
-//     pub fn insert_map(&mut self, map: &HashMap<CourseCode, RegistrationRestrictions>) {
-//         for (&course, restrictions) in map.iter() {
-//             let node_index = self.insert_qualification(&Qualification::Course(course));
-//
-//             if let Some(prereq_tree) = &restrictions.prerequisite_restrictions {
-//                 self.insert(node_index, prereq_tree);
-//             }
-//         }
-//     }
-//
-//     fn insert(&mut self, location: NodeIndex, prereq_tree: &PrerequisiteTree) {
-//         let to_insert = match *prereq_tree {
-//             PrerequisiteTree::Qualification(ref qualification) => {
-//                 self.insert_qualification(qualification)
-//             }
-//             PrerequisiteTree::Conjunctive(conj, ref children) => {
-//                 let found = self.nodes.iter()
-//                     .position(|n| n.is_conjunctive(conj) && self.is_equal(&n.dependencies, children))
-//                     .map(NodeIndex);
-//
-//                 found.unwrap_or_else(|| {
-//                     let new_index = NodeIndex(self.nodes.len());
-//                     self.nodes.push(Node {
-//                         kind: NodeKind::Conjunctive(conj),
-//                         dependencies: Vec::new(),
-//                     });
-//                     for c in children {
-//                         self.insert(new_index, c);
-//                     }
-//                     new_index
-//                 })
-//             }
-//         };
-//
-//         self[location].dependencies.push(to_insert);
-//     }
-//
-//     fn is_equal(&self, dependencies: &[NodeIndex], prereq_tree: &[PrerequisiteTree]) -> bool {
-//         if dependencies.len() != prereq_tree.len() { return false }
-//
-//         dependencies.iter().zip(prereq_tree)
-//             .all(|(&d, c)| {
-//                 match c {
-//                     PrerequisiteTree::Qualification(q) => self[d].is_qualification(q),
-//                     PrerequisiteTree::Conjunctive(conj, children) => {
-//                         self[d].is_conjunctive(*conj)
-//                             && self.is_equal(&self[d].dependencies, children)
-//                     }
-//                 }
-//             })
-//     }
-//
-//     fn insert_qualification(&mut self, qualification: &Qualification) -> NodeIndex {
-//         let result = self.iter()
-//             .find(|(_, node)| node.is_qualification(qualification))
-//             .map(|(i, _)| i);
-//
-//         result.unwrap_or_else(|| {
-//             let new_index = NodeIndex(self.nodes.len());
-//             self.nodes.push(Node {
-//                 kind: NodeKind::Qualification(qualification.clone()),
-//                 dependencies: Vec::new(),
-//             });
-//             new_index
-//         })
-//     }
-//
-//     pub fn debug_print(&self) {
-//         for (i, node) in self.iter() {
-//             print!("{:?}\t", i);
-//
-//             match &node.kind {
-//                 NodeKind::Conjunctive(conj) => print!("{}", conj),
-//                 NodeKind::Qualification(qual) => print!("{}", qual),
-//             }
-//
-//             println!("\t{:?}", node.dependencies);
-//         }
-//     }
-//
-//     /// Returns string representing the graph in Graphviz Dot language
-//     pub fn graphviz(&self) -> String {
-//         let mut no_bucket = Vec::new();
-//         let mut buckets: HashMap<Subject, Vec<NodeIndex>> = HashMap::new();
-//
-//         for (i, node) in self.iter() {
-//             match node.kind {
-//                 NodeKind::Qualification(Qualification::Course(CourseCode { subject, .. })) => buckets.entry(subject).or_default().push(i),
-//                 _ => no_bucket.push(i),
-//             }
-//         }
-//
-//         let write_node = |ret: &mut String, i: NodeIndex| {
-//             let node = &self[i];
-//             match node.kind() {
-//                 NodeKind::Qualification(Qualification::ExamScore(q)) => {
-//                     writeln!(ret, r#"{} [label="{}",shape=box,color=blue]"#, i.0, q).unwrap();
-//                 }
-//                 NodeKind::Qualification(Qualification::Course(code)) => {
-//                     writeln!(ret, r#"{} [label="{}",shape=box]"#, i.0, code).unwrap();
-//                 }
-//                 NodeKind::Conjunctive(conjunctive) => {
-//                     writeln!(ret, "{} [label={}]", i.0, conjunctive).unwrap();
-//                 }
-//             }
-//
-//             for dependency in node.dependencies() {
-//                 writeln!(ret, "{} -> {}", dependency.0, i.0).unwrap();
-//             }
-//         };
-//
-//         fn remove_space(string: &str) -> String {
-//             string.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
-//         }
-//
-//         let mut ret = String::from("digraph {\nrankdir=TB\ncompound=true;\n");
-//
-//         for (s, nodes) in buckets {
-//             writeln!(ret, "subgraph cluster_{} {{\nrankdir=LR", remove_space(&s.to_string())).unwrap();
-//
-//             for i in nodes {
-//                 write_node(&mut ret, i);
-//             }
-//             writeln!(ret, "}}").unwrap();
-//         }
-//
-//         for i in no_bucket {
-//             write_node(&mut ret, i);
-//         }
-//
-//         ret.push_str("}");
-//
-//         ret
-//     }
-// }
-//
-//
-// impl Index<NodeIndex> for Graph {
-//     type Output = Node;
-//     fn index(&self, index: NodeIndex) -> &Node {
-//         &self.nodes[index.0]
-//     }
-// }
-//
-// impl IndexMut<NodeIndex> for Graph {
-//     fn index_mut(&mut self, index: NodeIndex) -> &mut Node {
-//         &mut self.nodes[index.0]
-//     }
-// }
+fn integer_square_root(n: u64) -> u64 {
+    if n == 0 { return 0 }
+
+    let mut x = n;
+
+    let result = loop {
+        let x_prev = x;
+        x = (x + n / x) / 2;
+
+        if x_prev == x || x_prev + 1 == x {
+            break x_prev;
+        }
+    };
+
+    result
+}

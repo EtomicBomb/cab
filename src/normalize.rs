@@ -1,10 +1,8 @@
-use crate::restrictions::{PrerequisiteTree, Qualification, ScoreQualification, CourseCode, Conjunctive};
+use crate::restrictions::{PrerequisiteTree, Qualification, ScoreQualification};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::io::{BufReader, BufRead};
 use std::fs::File;
-use std::str::FromStr;
-use std::cmp::Reverse;
 use crate::parse_prerequisite_string::parse_prerequisite_string;
 
 // needs: distributive laws

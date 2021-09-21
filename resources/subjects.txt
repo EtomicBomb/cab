@@ -1,13 +1,13 @@
-AFRI;Africana Studies;culture;000075
+AFRI;Africana Studies;culture;3030a0
 SIGN;American Sign Language;language;dcbeff
-AMST;American Studies;culture;000075
-AMCV;American Civilization;culture;000075
+AMST;American Studies;culture;3030a0
+AMCV;American Civilization;culture;3030a0
 ANTH;Anthropology;other;ffe119
 APMA;Applied Mathematics;other;ffe119
 ARAB;Arabic;language;dcbeff
-ARCH;Archaeology and Ancient World;culture;000075
-ASYR;Assyriology;culture;000075
-AWAS;Ancient Western Asian Studies;culture;000075
+ARCH;Archaeology and Ancient World;culture;3030a0
+ASYR;Assyriology;culture;3030a0
+AWAS;Ancient Western Asian Studies;culture;3030a0
 BHBR;Biblical Hebrew;language;dcbeff
 BIOL;Biology;physical science;3cb44b
 PHP;Biomedicine-Community Health;physical science;3cb44b
@@ -26,18 +26,18 @@ COST;Contemplative Studies;other;ffe119
 CZCH;Czech;language;dcbeff
 DATA;Data Science;abstract science;800000
 DEVL;Development Studies;other;ffe119
-ERLY;Early Cultures;culture;000075
-EMOW;Early Modern World;culture;000075
+ERLY;Early Cultures;culture;3030a0
+EMOW;Early Modern World;culture;3030a0
 EEPS;Earth, Environmental and Planetary Sciences;physical science;3cb44b
-EAST;East Asian Studies;culture;000075
+EAST;East Asian Studies;culture;3030a0
 ECON;Economics;physical science;3cb44b
 EDUC;Education;other;ffe119
-EGYT;Egyptology;culture;000075
+EGYT;Egyptology;culture;3030a0
 ENGN;Engineering;physical science;3cb44b
 ENGL;English;other;ffe119
 EINT;English for Internationals;language;dcbeff
 ENVS;Environmental Studies;physical science;3cb44b
-ETHN;Ethnic Studies;culture;000075
+ETHN;Ethnic Studies;culture;3030a0
 FREN;French Studies;language;dcbeff
 GNSS;Gender and Sexuality Studies;other;ffe119
 GEOL;Geological Sciences;physical science;3cb44b
@@ -48,7 +48,7 @@ GISP;Group Independent Studies;other;ffe119
 HCL;Healthcare Leadership;other;ffe119
 HEBR;Hebrew;language;dcbeff
 HNDI;Hindi-Urdu;language;dcbeff
-HISP;Hispanic Studies;culture;000075
+HISP;Hispanic Studies;culture;3030a0
 HIST;History;other;ffe119
 HIAA;History of Art and Architecture;other;ffe119
 HMAN;Humanities;other;ffe119
@@ -58,18 +58,18 @@ INTL;International and Public Affairs;other;ffe119
 INTR;Internship;other;ffe119
 ITAL;Italian Studies;language;dcbeff
 JAPN;Japanese;language;dcbeff
-JUDS;Judaic Studies;culture;000075
+JUDS;Judaic Studies;culture;3030a0
 KREA;Korean;language;dcbeff
 LANG;Language Studies;language;dcbeff
 LATN;Latin;language;dcbeff
-LACA;Latin American and Caribbean Studies;culture;000075
+LACA;Latin American and Caribbean Studies;culture;3030a0
 LING;Linguistics;physical science;3cb44b
 LITR;Literary Arts;other;ffe119
 MATH;Mathematics;abstract science;800000
 MED;Medical Education;other;ffe119
-MDVL;Medieval Studies;culture;000075
-MES;Middle East Studies;culture;000075
-MCM;Modern Culture and Media;culture;000075
+MDVL;Medieval Studies;culture;3030a0
+MES;Middle East Studies;culture;3030a0
+MCM;Modern Culture and Media;culture;3030a0
 MGRK;Modern Greek;language;dcbeff
 MPA;Public Affairs;other;ffe119
 MUSC;Music;other;ffe119
@@ -85,14 +85,14 @@ PHUM;Public Humanities;other;ffe119
 PLCY;Public Policy;other;ffe119
 PSYC;Psychological Sciences;physical science;3cb44b
 RELS;Religious Studies;other;ffe119
-REMS;Renaissance and Early Modern Studies;culture;000075
+REMS;Renaissance and Early Modern Studies;culture;3030a0
 RUSS;Russian;language;dcbeff
 SANS;Sanskrit;language;dcbeff
 SCSO;Science and Society;physical science;3cb44b
 STS;Science, Technology and Society;physical science;3cb44b
 SLAV;Slavic;language;dcbeff
 SOC;Sociology;physical science;3cb44b
-SAST;South Asian Studies;culture;000075
+SAST;South Asian Studies;culture;3030a0
 SWED;Swedish;language;dcbeff
 TAPS;Theatre Arts and Performance Studies;other;ffe119
 TKSH;Turkish;language;dcbeff

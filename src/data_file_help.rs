@@ -39,8 +39,8 @@ pub fn look_for_prerequisite_corrections(restrictions: &HashMap<CourseCode, Regi
         let course_code: CourseCode = course.file_stem().unwrap().to_str().unwrap().parse().unwrap();
 
         let should_look = restrictions[&course_code].prerequisite_restrictions.is_none()
-            && !restrictions[&course_code].informal_prerequisite;
-        && !restrictions[&course_code].override_required;
+            && !restrictions[&course_code].informal_prerequisite
+            && !restrictions[&course_code].override_required;
 
         if should_look {
             for variant in fs::read_dir(course).unwrap() {
