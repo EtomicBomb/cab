@@ -1,19 +1,17 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-#[macro_use]
-mod json;
-mod request;
 mod restrictions;
 mod parse_prerequisite_string;
 mod subject;
 mod graph;
 mod data_file_help;
 mod normalize;
+mod download;
 
+use serde_json::Value;
 use regex::{RegexBuilder, Regex};
 use once_cell::sync::Lazy;
-use crate::json::{Json};
 use std::{io, fs};
 use std::collections::{HashMap};
 use crate::restrictions::{ProgramRestriction, SemesterRestriction, RegistrationRestrictions, SemesterRange, CourseCode, Qualification, PrerequisiteTree, Conjunctive, LevelRestriction};
@@ -36,36 +34,61 @@ use std::fmt::Write as FmtWrite;
 // The course faculty are the definitive source of information for the course you're interested in.
 
 // This visualization does not support circular dependencies. These are occasionally appropriate, and used by courses like VISA 1510. There are just not shown here.
+use reqwest::Client;
 
-fn main() -> io::Result<()> {
-    let restrictions = AllRestrictions::new()?;
-    let graph = SubjectGraphs::new(&restrictions);
+#[tokio::main]
+async fn main() {
+//    let result = request::scrape_course_stubs().expect("no course stubs");
+//    println!("{result}");
 
-    let dot_string = graph.graphviz();
+    let client = Client::builder()
+        .build()
+        .expect("client not available");
 
-    eprintln!("Running Graphviz...");
+    let output = tokio::fs::File::create("all.json").await.unwrap();
+    download::download(&client, ["202210"], 1, output).await;
 
-    let mut dotted = Command::new("dot")
-        .arg("-Tsvg")
-        .arg("/dev/stdin")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
+//    let result = download::scrape_course_stubs2(client).await.expect("no response");
+//    std::fs::write("stubs.json", &result).expect("could not write");
 
-    dotted.stdin.take().unwrap().write_all(dot_string.as_bytes())?;
+//    let course_stubs = download::course_keys(&client, ["202210"], 1, "hello").await;
+//    println!("{course_stubs:?}");
 
-    let mut svg = String::new();
-    dotted.stdout.take().unwrap().read_to_string(&mut svg)?;
 
-    dotted.wait()?;
+//    let result = download::course_details(client, "CSCI 0200".parse().unwrap(), 17019).await.expect("a");
+//    println!("{result}");
 
-    eprintln!("Filtering Graphviz output...");
-    svg_filter(&mut svg, &restrictions);
-
-    let output_path = output_svg_path();
-    eprintln!("Writing new svg to {}", &output_path);
-    fs::write(&output_path, svg)
 }
+
+//fn main() -> io::Result<()> {
+//    let restrictions = AllRestrictions::new()?;
+//    let graph = SubjectGraphs::new(&restrictions);
+//
+//    let dot_string = graph.graphviz();
+//
+//    eprintln!("Running Graphviz...");
+//
+//    let mut dotted = Command::new("dot")
+//        .arg("-Tsvg")
+//        .arg("/dev/stdin")
+//        .stdin(Stdio::piped())
+//        .stdout(Stdio::piped())
+//        .spawn()?;
+//
+//    dotted.stdin.take().unwrap().write_all(dot_string.as_bytes())?;
+//
+//    let mut svg = String::new();
+//    dotted.stdout.take().unwrap().read_to_string(&mut svg)?;
+//
+//    dotted.wait()?;
+//
+//    eprintln!("Filtering Graphviz output...");
+//    svg_filter(&mut svg, &restrictions);
+//
+//    let output_path = output_svg_path();
+//    eprintln!("Writing new svg to {}", &output_path);
+//    fs::write(&output_path, svg)
+//}
 
 fn svg_filter(svg: &mut String, restrictions: &AllRestrictions) {
     // static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<g id=".*?" class="node qual_(.*?)">.*?points="(.*?),(.*?) .*?</g>"#).unwrap());
@@ -145,7 +168,7 @@ impl AllRestrictions {
                 let restriction = fs::read_dir(course)?
                     .map(|variant| {
                         let path = variant?.path();
-                        let json: Json = fs::read_to_string(path)?.parse().unwrap();
+                        let json: Value = serde_json::from_str(&fs::read_to_string(path)?).unwrap();
                         Ok(RegistrationRestrictions::from_json(course_code, &json))
                     })
                     .sum::<io::Result<RegistrationRestrictions>>()?

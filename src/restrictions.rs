@@ -1,6 +1,5 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
-use crate::json::Json;
 use std::fmt;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Formatter, Write};
@@ -12,6 +11,7 @@ use crate::normalize::normalize;
 use crate::parse_prerequisite_string::{parse_prerequisite_string};
 use std::iter::Sum;
 use std::ops::Add;
+use serde_json::Value;
 
 #[derive(Debug, Default, Clone)]
 pub struct RegistrationRestrictions {
@@ -24,8 +24,8 @@ pub struct RegistrationRestrictions {
 }
 
 impl RegistrationRestrictions {
-    pub fn from_json(course: CourseCode, root: &Json) -> RegistrationRestrictions {
-        match root.object("registration_restrictions").get_string() {
+    pub fn from_json(course: CourseCode, root: &Value) -> RegistrationRestrictions {
+        match root["registration_restrictions"].as_str() {
             Some(restrictions) => RegistrationRestrictions {
                 prerequisite_restrictions: prerequisite_tree_from_correction(course)
                     .or_else(|| PrerequisiteTree::from_restrictions_string(restrictions)),
@@ -79,7 +79,7 @@ impl Sum for RegistrationRestrictions {
     }
 }
 
-fn override_required(course_code: CourseCode, root: &Json) -> bool {
+fn override_required(course_code: CourseCode, root: &Value) -> bool {
     static OVERRIDE_CORRECTIONS: Lazy<HashSet<CourseCode>> = Lazy::new(|| {
         let file = BufReader::new(File::open("resources/override_corrections.txt").unwrap());
         file.lines()
@@ -91,11 +91,11 @@ fn override_required(course_code: CourseCode, root: &Json) -> bool {
 
     if OVERRIDE_CORRECTIONS.contains(&course_code) { return true }
 
-    match root.object("permreq") {
-        Json::Null => false,
-        Json::String(ref s) if s == "N" => false,
-        Json::String(ref s) if s == "Y" => true,
-        e => panic!("{:?}", e),
+    match root["permreq"] {
+        Value::Null => false,
+        Value::String(ref s) if s == "N" => false,
+        Value::String(ref s) if s == "Y" => true,
+        ref e => panic!("{:?}", e),
     }
 }
 

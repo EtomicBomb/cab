@@ -1,9 +1,9 @@
 use std::fs;
 use crate::restrictions::{CourseCode, RegistrationRestrictions};
-use crate::json::Json;
 use regex::Regex;
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use serde_json::Value;
 
 pub fn look_for_override_corrections(restrictions: &HashMap<CourseCode, RegistrationRestrictions>) {
     for course in fs::read_dir("resources/scraped").unwrap() {
@@ -15,9 +15,9 @@ pub fn look_for_override_corrections(restrictions: &HashMap<CourseCode, Registra
         if should_look {
             for variant in fs::read_dir(course).unwrap() {
                 let variant = variant.unwrap().path();
-                let root: Json = fs::read_to_string(variant).unwrap().parse().unwrap();
+                let root: Value = serde_json::from_str(&fs::read_to_string(variant).unwrap()).unwrap();
 
-                if let Some(desc) = root.object("description").get_string() {
+                if let Some(desc) = root["description"].as_str() {
                     static TM: Lazy<Regex> = Lazy::new(|| Regex::new(r#"override|permission|approv"#).unwrap());
 
                     if let Some(m) = TM.find(&desc) {
@@ -45,9 +45,9 @@ pub fn look_for_prerequisite_corrections(restrictions: &HashMap<CourseCode, Regi
         if should_look {
             for variant in fs::read_dir(course).unwrap() {
                 let variant = variant.unwrap().path();
-                let root: Json = fs::read_to_string(variant).unwrap().parse().unwrap();
+                let root: Value = serde_json::from_str(&fs::read_to_string(variant).unwrap()).unwrap();
 
-                if let Some(desc) = root.object("description").get_string() {
+                if let Some(desc) = root["description"].as_str() {
                     if desc.contains("o prerequisite") { continue } // desc isn't 'No prerequisite.'
                     static TM: Lazy<Regex> = Lazy::new(|| Regex::new(r#"rerequisite|recommend|expect"#).unwrap()); // can add `experience`
 

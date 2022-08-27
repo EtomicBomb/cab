@@ -6,19 +6,14 @@ use std::fmt;
 use crate::subject::Subjects;
 use std::fmt::{Formatter, Write};
 
-pub fn parse_prerequisite_string(string: &str) -> Result<PrerequisiteTree, PrerequisiteStringError> {
-    let mut tokens = TokenStream::from_string(string)?;
-    let ret = parse_top(&mut tokens);
-    ret
-}
-
 // GRAMMAR:
-// TOP      = any_expr eoi
+// top      = any_expr Eoi
 // any_expr = and_expr (Any and_expr)*
 // and_expr = base (All base)*
 // base     = Course | ExamScore | LeftParen any_expr RightParen
-fn parse_top<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<PrerequisiteTree, PrerequisiteStringError<'a>> {
-    let ret = parse_any_expr(tokens);
+pub fn parse_prerequisite_string(string: &str) -> Result<PrerequisiteTree, PrerequisiteStringError> {
+    let mut tokens = TokenStream::from_string(string)?;
+    let ret = parse_any_expr(&mut tokens);
     tokens.consume_token(TokenKind::Eoi)?;
     ret
 }
@@ -156,7 +151,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Comma => f.write_str(","),
             TokenKind::LeftParen => f.write_str("("),
             TokenKind::RightParen => f.write_str(")"),
-            TokenKind::Eoi => f.write_str("Eoi"),
+            TokenKind::Eoi => f.write_str("end of input"),
         }
     }
 }
