@@ -35,29 +35,47 @@ use std::fmt::Write as FmtWrite;
 
 // This visualization does not support circular dependencies. These are occasionally appropriate, and used by courses like VISA 1510. There are just not shown here.
 use reqwest::Client;
+use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() {
-//    let result = request::scrape_course_stubs().expect("no course stubs");
-//    println!("{result}");
+    let databases = [
+        "201600", // Summer 2016
+        "201610", // Fall 2016
+        "201615", // Winter 2017
+        "201620", // Spring 2017
+        "201700", // Summer 2017
+        "201710", // Fall 2017
+        "201715", // Winter 2018
+        "201720", // Spring 2018
+        "201800", // Summer 2018
+        "201810", // Fall 2018
+        "201815", // Winter 2019
+        "201820", // Spring 2019
+        "201900", // Summer 2019
+        "201910", // Fall 2019
+        "201915", // Winter 2020
+        "201920", // Spring 2020
+        "202000", // Summer 2020
+        "202010", // Fall 2020
+        "202020", // Spring 2021
+        "202100", // Summer 2021
+        "202110", // Fall 2021
+        "202115", // Winter 2022
+        "202120", // Spring 2022
+        "202200", // Summer 2022
+        "202210", // Fall 2022
+        "202215", // Winter 2023
+        "202220", // Spring 2023
+    ];
 
     let client = Client::builder()
         .build()
         .expect("client not available");
 
-    let output = tokio::fs::File::create("all.json").await.unwrap();
-    download::download(&client, ["202210"], 1, output).await;
-
-//    let result = download::scrape_course_stubs2(client).await.expect("no response");
-//    std::fs::write("stubs.json", &result).expect("could not write");
-
-//    let course_stubs = download::course_keys(&client, ["202210"], 1, "hello").await;
-//    println!("{course_stubs:?}");
-
-
-//    let result = download::course_details(client, "CSCI 0200".parse().unwrap(), 17019).await.expect("a");
-//    println!("{result}");
-
+    let mut output = tokio::fs::File::create("cab.jsonl").await.unwrap();
+    download::download(&client, databases, 1, &mut output).await;
+    output.shutdown().await.unwrap();
 }
 
 //fn main() -> io::Result<()> {
@@ -145,7 +163,7 @@ impl AllRestrictions {
                 writeln!(ret, r#"<text x="{}" y="{}" style="font-family:monospace;font-size:8px">{}</text>"#, x+16.5, y+30.0, text).unwrap();
             }
             if let Some(c) = c.program_restrictions {
-                let (color, text) = match c {
+                let (_, text) = match c {
                     ProgramRestriction::StemUndergraduate => ("000000", "stem"),
                     ProgramRestriction::PublicHealthGraduate => ("000000", "phG"),
                     ProgramRestriction::LiteraryArtsGraduate => ("000000", "litG"),
