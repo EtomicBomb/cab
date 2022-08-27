@@ -39,7 +39,7 @@ use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() {
-    let databases = [
+    let terms = [
         "201600", // Summer 2016
         "201610", // Fall 2016
         "201615", // Winter 2017
@@ -74,9 +74,24 @@ async fn main() {
         .expect("client not available");
 
     let mut output = tokio::fs::File::create("cab.jsonl").await.unwrap();
-    download::download(&client, databases, 1, &mut output).await;
+    download::download(&client, &terms, 5, &mut output).await;
     output.shutdown().await.unwrap();
 }
+
+//pub async fn course_detail<'a, 'b, 'c>(
+//    client: &'c Client, 
+//) -> reqwest::Result<bytes::Bytes> {
+//
+//    client.post("https://cab.brown.edu/api/?page=fose&route=details")
+//        .json(&serde_json::json!({
+//            "srcdb": "201610",
+//            "key": format!("key:1892"),
+//        }))
+//        .send()
+//        .await?
+//        .bytes()
+//        .await
+//}
 
 //fn main() -> io::Result<()> {
 //    let restrictions = AllRestrictions::new()?;

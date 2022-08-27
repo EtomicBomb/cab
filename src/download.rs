@@ -18,66 +18,90 @@ use tokio::io::AsyncWrite;
 //{"group":"code:VISA 1110","key":"","srcdb":"202210","matched":"crn:17685,18097"}
 //{"group":"code:VISA 1110","key":"crn:17685","srcdb":"202210","matched":"crn:17685,18097"}
 
-pub async fn download<'a, 'b, W, I>(
+//pub async fn update(
+//    source: serde_json::de::Read,
+//    terms: &[&str],
+//    max_connections: usize,
+//    destination: W,
+//) 
+//{
+//
+//    let json_stream = serde_json::StreamDeserializer::new(source);
+//
+//}
+
+pub async fn download<'a, 'b, W>(
     client: &'b Client,
-    databases: I,
+    terms: &'a [&'a str],
     max_connections: usize,
-    destination: W,
+    mut destination: W,
 ) 
 where 
+    'b: 'a,
     W: AsyncWrite + Unpin,
-    I: IntoIterator<Item=&'a str>,
 {
-    let stubs = stubs(client, databases, max_connections).await;
-    course_details(client, stubs, max_connections, destination).await;
+    let stubs = stubs(client, terms, max_connections).await;
+    let mut json_chunks = course_details(client, &stubs, max_connections).await
+        .boxed_local();
+
+    while let Some(mut json) = json_chunks.next().await {
+        let _ = destination.write_all_buf(&mut json).await;
+        let _ = destination.write_all(b"\n").await;
+    }
 }
 
 struct Stub<'a> {
-    key: String,
-    database: &'a str,
+    crn: String,
+    term: &'a str,
 }
 
-async fn stubs<'a, 'b, I>(
+async fn stubs<'a: 'b, 'b>(
     client: &'b Client,
-    databases: I, 
+    terms: &'a [&'a str],
     max_connections: usize,
-) -> impl Stream<Item=Stub<'a>> + 'b 
+) -> Vec<Stub<'a>>
 where 
-    'a: 'b,
-    I: IntoIterator<Item=&'a str>,
-    <I as IntoIterator>::IntoIter: 'b,
 {
-    stream::iter(databases)
-        .map(move |database| async move {
-            let keys = stub_keys(client, database).await?;
-            let stubs: Vec<_> = keys.into_iter()
-                .map(|StubKey { key }| Stub { key, database })
+    stream::iter(terms)
+        .enumerate()
+        .map(move |(i, term)| async move {
+            eprint!("[{}/{}] requesting stub {term}\r", i+1, terms.len());
+            std::io::stdout().flush().unwrap();
+            let crns = crns(client, term).await?;
+            let stubs: Vec<_> = crns.into_iter()
+                .map(|Crn { crn }| Stub { crn, term })
                 .collect();
             Ok::<_, reqwest::Error>(stubs)
         })
         .buffer_unordered(max_connections)
-        .filter_map(|stubs| async { stubs.ok() })
+        .filter_map(|b| async { 
+            match b {
+                Ok(b) => Some(b),
+                Err(e) => {
+                    eprintln!("stub lookup failed: {e:?}");
+                    None
+                }
+            }})
         .flat_map(stream::iter)
+        .collect()
+        .await
 }
 
 #[derive(Debug, Deserialize)]
-struct StubKey {
-    key: String,
+struct Crn {
+    crn: String,
 }
 
-async fn stub_keys(client: &Client, database: &str) -> reqwest::Result<Vec<StubKey>> {
+async fn crns(client: &Client, term: &str) -> reqwest::Result<Vec<Crn>> {
     #[derive(Debug, Deserialize)]
-    pub struct SearchResults {
-        results: Vec<StubKey>,
+    struct SearchResults {
+        results: Vec<Crn>,
     }
 
     let result = client.post("https://cab.brown.edu/api/?page=fose&route=search")
         .json(&json!({
-            "other": database,
-            "criteria": [{
-                "field": "is_ind_study",
-                "value": "N"
-            }],
+            "other": {"srcdb": term},
+            "criteria": [],
         }))
         .send()
         .await?
@@ -88,38 +112,40 @@ async fn stub_keys(client: &Client, database: &str) -> reqwest::Result<Vec<StubK
     Ok(result)
 }
 
-async fn course_details<'a, W, S>(
-    client: &Client, 
-    stubs: S,
+async fn course_details<'a>(
+    client: &'a Client, 
+    stubs: &'a [Stub<'a>],
     max_connections: usize,
-    mut destination: W,
-) 
+) -> impl Stream<Item=Bytes> + 'a
 where
-    W: AsyncWrite + Unpin,
-    S: Stream<Item=Stub<'a>>,
 {
-    let mut json_chunks = stubs
-        .map(|stub| course_detail(client, stub))
+    stream::iter(stubs)
+        .enumerate()
+        .map(move |(i, stub)| {
+            eprint!("[{}/{}] requesting detail {}/{}\r", i+1, stubs.len(), stub.term, stub.crn);
+            std::io::stdout().flush().unwrap();
+            course_detail(client, stub)
+        })
         .buffer_unordered(max_connections)
-        .filter_map(|b| async { b.ok() })
-        .boxed_local();
-
-    while let Some(mut json) = json_chunks.next().await {
-        let _ = destination.write_all_buf(&mut json).await;
-        let _ = destination.write_all(b"\n").await;
-    }
+        .filter_map(|b| async { 
+            match b {
+                Ok(b) => Some(b),
+                Err(e) => {
+                    eprintln!("course detail lookup failed: {e:?}");
+                    None
+                }
+            }})
 }
 
 async fn course_detail<'a, 'b, 'c>(
     client: &'c Client, 
-    stub: Stub<'a>,
+    stub: &Stub<'a>,
 ) -> reqwest::Result<Bytes> {
 
-    eprintln!("new request {}/{}", stub.database, stub.key);
     client.post("https://cab.brown.edu/api/?page=fose&route=details")
         .json(&json!({
-            "srcdb": &stub.database,
-            "key": format!("key:{}", stub.key),
+            "srcdb": &stub.term,
+            "key": format!("crn:{}", stub.crn),
         }))
         .send()
         .await?
