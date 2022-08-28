@@ -101,7 +101,10 @@ async fn crns(client: &Client, term: &str) -> reqwest::Result<Vec<Crn>> {
     let result = client.post("https://cab.brown.edu/api/?page=fose&route=search")
         .json(&json!({
             "other": {"srcdb": term},
-            "criteria": [],
+            "criteria": [
+                {"field":"is_ind_study","value":"N"},
+                {"field":"is_canc","value":"N"}
+            ],
         }))
         .send()
         .await?

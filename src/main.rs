@@ -73,8 +73,8 @@ async fn main() {
         .build()
         .expect("client not available");
 
-    let mut output = tokio::fs::File::create("cab.jsonl").await.unwrap();
-    download::download(&client, &terms, 5, &mut output).await;
+    let mut output = tokio::fs::File::create("no-canc-indep-study.jsonl").await.unwrap();
+    download::download(&client, &terms, 10, &mut output).await;
     output.shutdown().await.unwrap();
 }
 
