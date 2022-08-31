@@ -18,28 +18,12 @@ use tokio::io::AsyncWrite;
 //{"group":"code:VISA 1110","key":"","srcdb":"202210","matched":"crn:17685,18097"}
 //{"group":"code:VISA 1110","key":"crn:17685","srcdb":"202210","matched":"crn:17685,18097"}
 
-//pub async fn update(
-//    source: serde_json::de::Read,
-//    terms: &[&str],
-//    max_connections: usize,
-//    destination: W,
-//) 
-//{
-//
-//    let json_stream = serde_json::StreamDeserializer::new(source);
-//
-//}
-
-pub async fn download<'a, 'b, W>(
-    client: &'b Client,
+pub async fn download<'a, W: AsyncWrite + Unpin>(
+    client: &Client,
     terms: &'a [&'a str],
     max_connections: usize,
     mut destination: W,
-) 
-where 
-    'b: 'a,
-    W: AsyncWrite + Unpin,
-{
+) {
     let stubs = stubs(client, terms, max_connections).await;
     let mut json_chunks = course_details(client, &stubs, max_connections).await
         .boxed_local();
@@ -55,13 +39,11 @@ struct Stub<'a> {
     term: &'a str,
 }
 
-async fn stubs<'a: 'b, 'b>(
-    client: &'b Client,
+async fn stubs<'a>(
+    client: &Client,
     terms: &'a [&'a str],
     max_connections: usize,
-) -> Vec<Stub<'a>>
-where 
-{
+) -> Vec<Stub<'a>> {
     stream::iter(terms)
         .enumerate()
         .map(move |(i, term)| async move {
@@ -117,7 +99,7 @@ async fn crns(client: &Client, term: &str) -> reqwest::Result<Vec<Crn>> {
 
 async fn course_details<'a>(
     client: &'a Client, 
-    stubs: &'a [Stub<'a>],
+    stubs: &'a [Stub<'_>],
     max_connections: usize,
 ) -> impl Stream<Item=Bytes> + 'a
 where
@@ -140,14 +122,13 @@ where
             }})
 }
 
-async fn course_detail<'a, 'b, 'c>(
-    client: &'c Client, 
-    stub: &Stub<'a>,
+async fn course_detail(
+    client: &Client, 
+    stub: &Stub<'_>,
 ) -> reqwest::Result<Bytes> {
-
     client.post("https://cab.brown.edu/api/?page=fose&route=details")
         .json(&json!({
-            "srcdb": &stub.term,
+            "srcdb": stub.term,
             "key": format!("crn:{}", stub.crn),
         }))
         .send()

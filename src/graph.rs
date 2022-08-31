@@ -39,10 +39,10 @@ pub struct SubjectGraph {
 
 impl SubjectGraph {
     pub fn new(subject: Subject, restrictions: &AllRestrictions, id_generator: &mut IdGenerator) -> SubjectGraph {
-        let mut ret = SubjectGraph { nodes: Vec::new(), subject };
+        let mut ret = SubjectGraph { nodes: Vec::new(), subject: subject.clone() };
 
         for (course, restrictions) in restrictions.iter().filter(|(course, _)| course.subject == subject) {
-            let node_index = ret.insert_qualification(Qualification::Course(course), id_generator);
+            let node_index = ret.insert_qualification(&Qualification::Course(course.clone()), id_generator);
 
             if let Some(prereq_tree) = &restrictions.prerequisite_restrictions {
                 ret.insert(node_index, prereq_tree, id_generator);
@@ -57,19 +57,19 @@ impl SubjectGraph {
     }
 
     fn insert(&mut self, location: NodeIndex, prereq_tree: &PrerequisiteTree, id_generator: &mut IdGenerator) {
-        let to_insert = match *prereq_tree {
+        let to_insert = match prereq_tree {
             PrerequisiteTree::Qualification(qualification) => {
                 self.insert_qualification(qualification, id_generator)
             }
             PrerequisiteTree::Conjunctive(conj, ref children) => {
                 let found = self.nodes.iter()
-                    .position(|n| n.is_conjunctive(conj) && self.is_equal(&n.dependencies, children))
+                    .position(|n| n.is_conjunctive(*conj) && self.is_equal(&n.dependencies, children))
                     .map(NodeIndex);
 
                 found.unwrap_or_else(|| {
                     let new_index = NodeIndex(self.nodes.len());
                     self.nodes.push(Node {
-                        kind: NodeKind::Conjunctive(conj),
+                        kind: NodeKind::Conjunctive(*conj),
                         dependencies: Vec::new(),
                         id: id_generator.next(),
                     });
@@ -90,7 +90,7 @@ impl SubjectGraph {
         dependencies.iter().zip(prereq_tree)
             .all(|(&d, c)| {
                 match c {
-                    PrerequisiteTree::Qualification(q) => self[d].is_qualification(*q),
+                    PrerequisiteTree::Qualification(q) => self[d].is_qualification(q),
                     PrerequisiteTree::Conjunctive(conj, children) => {
                         self[d].is_conjunctive(*conj)
                             && self.is_equal(&self[d].dependencies, children)
@@ -99,7 +99,7 @@ impl SubjectGraph {
             })
     }
 
-    fn insert_qualification(&mut self, qualification: Qualification, id_generator: &mut IdGenerator) -> NodeIndex {
+    fn insert_qualification(&mut self, qualification: &Qualification, id_generator: &mut IdGenerator) -> NodeIndex {
         let result = self.iter()
             .find(|(_, node)| node.is_qualification(qualification))
             .map(|(i, _)| i);
@@ -121,12 +121,12 @@ impl SubjectGraph {
     }
 
     pub fn graphviz_cluster(&self, string: &mut String) {
-        let abbreviation = Subjects::all().abbreviation(self.subject);
+        let abbreviation = self.subject.to_string();
         writeln!(string, "subgraph cluster_{} {{", abbreviation).unwrap();
         writeln!(string, "packmode=\"graph\"").unwrap();
-        writeln!(string, "label=\"{}\"", Subjects::all().name(self.subject)).unwrap();
+        writeln!(string, "label=\"{}\"", Subjects::all().name(&self.subject)).unwrap();
 
-        let color = Subjects::all().color(self.subject);
+        let color = Subjects::all().color(&self.subject);
         writeln!(string, "bgcolor=\"#{}\"", color).unwrap();
 
         for node in self.nodes.iter() {
@@ -224,8 +224,11 @@ impl Node {
         self.kind == NodeKind::Conjunctive(conj)
     }
 
-    fn is_qualification(&self, qualification: Qualification) -> bool {
-        self.kind == NodeKind::Qualification(qualification)
+    fn is_qualification(&self, qualification: &Qualification) -> bool {
+        match &self.kind {
+            NodeKind::Qualification(qual) => qual == qualification,
+            _ => false,
+        }
     }
 }
 

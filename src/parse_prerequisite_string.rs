@@ -1,3 +1,4 @@
+use crate::subject::Subject;
 use std::collections::HashMap;
 use crate::restrictions::{Conjunctive, PrerequisiteTree, Qualification, ScoreQualification, CourseCode};
 use once_cell::sync::Lazy;
@@ -14,7 +15,7 @@ use std::fmt::{Formatter, Write};
 pub fn parse_prerequisite_string(string: &str) -> Result<PrerequisiteTree, PrerequisiteStringError> {
     let mut tokens = TokenStream::from_string(string)?;
     let ret = parse_any_expr(&mut tokens);
-    tokens.consume_token(TokenKind::Eoi)?;
+    tokens.consume_token(&TokenKind::Eoi)?;
     ret
 }
 
@@ -24,7 +25,7 @@ fn parse_any_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Prerequisit
     ret.push(token);
 
     while tokens.peek_token()?.kind == TokenKind::Conjunctive(Conjunctive::Any) {
-        tokens.consume_token(TokenKind::Conjunctive(Conjunctive::Any))?;
+        tokens.consume_token(&TokenKind::Conjunctive(Conjunctive::Any))?;
         let token = parse_all_expr(tokens)?;
         ret.push(token);
     }
@@ -39,7 +40,7 @@ fn parse_all_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Prerequisit
     ret.push(token);
 
     while tokens.peek_token()?.kind == TokenKind::Conjunctive(Conjunctive::All) {
-        tokens.consume_token(TokenKind::Conjunctive(Conjunctive::All))?;
+        tokens.consume_token(&TokenKind::Conjunctive(Conjunctive::All))?;
         let token = parse_bottom(tokens)?;
         ret.push(token);
     }
@@ -50,13 +51,13 @@ fn parse_all_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Prerequisit
 
 fn parse_bottom<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<PrerequisiteTree, PrerequisiteStringError<'a>> {
     let token = tokens.peek_token()?;
-    tokens.consume_token(token.kind)?;
+    tokens.consume_token(&token.kind)?;
 
     match token.kind {
         TokenKind::Qualification(qual) => Ok(PrerequisiteTree::Qualification(qual)),
         TokenKind::LeftParen => {
             let ret = parse_any_expr(tokens)?;
-            tokens.consume_token(TokenKind::RightParen)?;
+            tokens.consume_token(&TokenKind::RightParen)?;
             Ok(ret)
         },
         _ => Err(PrerequisiteStringError::ExpectedLeftParenOrQualification { found: token }),
@@ -77,15 +78,15 @@ impl<'a> TokenStream<'a> {
             let mut paren_level = 0;
 
             for token in tokens.iter_mut().rev() {
-                let matching_token = token.kind;
+                let matching_token = &token.kind;
 
                 match matching_token {
-                    TokenKind::Conjunctive(conj) => { conjunctives.insert(paren_level, conj); }
+                    TokenKind::Conjunctive(conj) => { conjunctives.insert(paren_level, *conj); }
                     TokenKind::LeftParen => paren_level += 1,
                     TokenKind::RightParen => paren_level -= 1,
-                    TokenKind::Comma => match conjunctives.get(&paren_level) {
-                        Some(&conj) => token.kind = TokenKind::Conjunctive(conj),
-                        None => return Err(PrerequisiteStringError::NoConjunctiveForComma { token: *token }),
+                    TokenKind::Comma => token.kind = match conjunctives.get(&paren_level) {
+                        Some(&conj) => TokenKind::Conjunctive(conj),
+                        None => TokenKind::Conjunctive(Conjunctive::Any),
                     },
                     _ => {},
                 }
@@ -100,21 +101,21 @@ impl<'a> TokenStream<'a> {
     }
 
     fn peek_token(&self) -> Result<Token<'a>, PrerequisiteStringError<'a>> {
-        self.tokens.get(self.index).copied().ok_or(PrerequisiteStringError::EarlyEoi)
+        self.tokens.get(self.index).cloned().ok_or(PrerequisiteStringError::EarlyEoi)
     }
 
-    fn consume_token(&mut self, token: TokenKind) -> Result<(), PrerequisiteStringError<'a>> {
-        let found = self.tokens[self.index];
-        if found.kind == token {
+    fn consume_token(&mut self, token: &TokenKind) -> Result<(), PrerequisiteStringError<'a>> {
+        let found = &self.tokens[self.index];
+        if &found.kind == token {
             self.index += 1;
             Ok(())
         } else {
-            Err(PrerequisiteStringError::ExpectedToken { expected: token, found })
+            Err(PrerequisiteStringError::ExpectedToken { expected: token.clone(), found: found.clone() })
         }
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token<'a> {
     kind: TokenKind,
     span: Span<'a>,
@@ -133,7 +134,7 @@ impl<'a> fmt::Display for Span<'a> {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Qualification(Qualification),
     Conjunctive(Conjunctive),
@@ -187,14 +188,12 @@ fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
             },
             _ if captures.name("num").is_some() => {
                 if let Some(subject) = captures.name("subj") {
-                    let subject = Subjects::all().code_from_abbreviation(subject.as_str())
-                        .ok_or(PrerequisiteStringError::BadSubject { span })?;
-
+                    let subject = subject.as_str().parse().unwrap();
                     last_subject = Some(subject);
                 }
 
                 TokenKind::Qualification(Qualification::Course(CourseCode {
-                    subject: last_subject.ok_or(PrerequisiteStringError::NoSubjectContext { span })?,
+                    subject: last_subject.clone().ok_or(PrerequisiteStringError::NoSubjectContext { span })?,
                     number: captures["num"].parse().unwrap(),
                 }))
             },
@@ -214,7 +213,7 @@ fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum PrerequisiteStringError<'a> {
     NoConjunctiveForComma { token: Token<'a> },
     InvalidToken { string: &'a str, start: usize },
@@ -227,11 +226,11 @@ pub enum PrerequisiteStringError<'a> {
 
 impl<'a> fmt::Debug for PrerequisiteStringError<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match *self {
+        match self {
             PrerequisiteStringError::NoConjunctiveForComma { token } =>
                 write!(f, "'{}': no conjunctive found for comma", token.span),
             PrerequisiteStringError::InvalidToken { string, start } =>
-                write!(f, "'{} [ {}': invalid token", &string[..start], &string[start..]),
+                write!(f, "'{} [ {}': invalid token", &string[..*start], &string[*start..]),
             PrerequisiteStringError::ExpectedToken { expected, found } =>
                 write!(f, "'{}': expected token {}", found.span, expected),
             PrerequisiteStringError::BadSubject { span } =>

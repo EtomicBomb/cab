@@ -40,7 +40,7 @@ fn equivalent(tree: PrerequisiteTree) -> PrerequisiteTree {
     });
 
     match tree {
-        PrerequisiteTree::Qualification(qual) => match EQUIVALENT_MAP.get(&qual) {
+        PrerequisiteTree::Qualification(ref qual) => match EQUIVALENT_MAP.get(qual) {
             Some(t) => t.clone(),
             None => tree,
         },

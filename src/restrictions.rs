@@ -24,7 +24,7 @@ pub struct RegistrationRestrictions {
 }
 
 impl RegistrationRestrictions {
-    pub fn from_json(course: CourseCode, root: &Value) -> RegistrationRestrictions {
+    pub fn from_json(course: &CourseCode, root: &Value) -> RegistrationRestrictions {
         match root["registration_restrictions"].as_str() {
             Some(restrictions) => RegistrationRestrictions {
                 prerequisite_restrictions: prerequisite_tree_from_correction(course)
@@ -79,7 +79,7 @@ impl Sum for RegistrationRestrictions {
     }
 }
 
-fn override_required(course_code: CourseCode, root: &Value) -> bool {
+fn override_required(course_code: &CourseCode, root: &Value) -> bool {
     static OVERRIDE_CORRECTIONS: Lazy<HashSet<CourseCode>> = Lazy::new(|| {
         let file = BufReader::new(File::open("resources/override_corrections.txt").unwrap());
         file.lines()
@@ -89,7 +89,7 @@ fn override_required(course_code: CourseCode, root: &Value) -> bool {
             .collect()
     });
 
-    if OVERRIDE_CORRECTIONS.contains(&course_code) { return true }
+    if OVERRIDE_CORRECTIONS.contains(course_code) { return true }
 
     match root["permreq"] {
         Value::Null => false,
@@ -99,7 +99,7 @@ fn override_required(course_code: CourseCode, root: &Value) -> bool {
     }
 }
 
-fn informal_prerequisite(course_code: CourseCode) -> bool {
+fn informal_prerequisite(course_code: &CourseCode) -> bool {
     static INFORMAL_PREREQUISITES: Lazy<HashSet<CourseCode>> = Lazy::new(|| {
         let file = BufReader::new(File::open("resources/informal.txt").unwrap());
         file.lines()
@@ -109,7 +109,7 @@ fn informal_prerequisite(course_code: CourseCode) -> bool {
             .collect()
     });
 
-    INFORMAL_PREREQUISITES.contains(&course_code)
+    INFORMAL_PREREQUISITES.contains(course_code)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -290,7 +290,7 @@ impl LevelRestriction {
     }
 }
 
-fn prerequisite_tree_from_correction(course_code: CourseCode) -> Option<PrerequisiteTree> {
+fn prerequisite_tree_from_correction(course_code: &CourseCode) -> Option<PrerequisiteTree> {
     static PREREQUISITE_CORRECTIONS: Lazy<HashMap<CourseCode, PrerequisiteTree>> = Lazy::new(|| {
         let file = BufReader::new(File::open("resources/prerequisite_corrections.txt").unwrap());
 
@@ -308,7 +308,7 @@ fn prerequisite_tree_from_correction(course_code: CourseCode) -> Option<Prerequi
         ret
     });
 
-    PREREQUISITE_CORRECTIONS.get(&course_code).cloned()
+    PREREQUISITE_CORRECTIONS.get(course_code).cloned()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
@@ -351,12 +351,18 @@ impl PrerequisiteTree {
 
         while let Some(tree) = stack.pop() {
             match tree {
-                PrerequisiteTree::Qualification(qualification) => { ret.insert(*qualification); },
+                PrerequisiteTree::Qualification(qualification) => { ret.insert(qualification.clone()); },
                 PrerequisiteTree::Conjunctive(_, children) => stack.extend(children),
             }
         }
 
         ret
+    }
+}
+
+impl Default for PrerequisiteTree {
+    fn default() -> Self {
+        PrerequisiteTree::Conjunctive(Conjunctive::Any, vec![])
     }
 }
 
@@ -379,7 +385,7 @@ impl fmt::Display for PrerequisiteTree {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub enum Qualification {
     Course(CourseCode),
     ExamScore(ScoreQualification),
@@ -411,7 +417,7 @@ impl fmt::Display for Conjunctive {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
 pub enum ScoreQualification {
     GraduateWaive,
     ExamScore(Exam, u16),
@@ -447,90 +453,119 @@ impl FromStr for ScoreQualification {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
-pub enum Exam {
-    ApBiology,
-    ApCalculusAb,
-    ApCalculusBc,
-    ApChemistry,
-    ApEnvironmental,
-    ApMacroeconomics,
-    ApMicroeconomics,
-    ApSpanishLanguage,
-    ApSpanishLiterature,
-    IbHlBiology,
-    IbHlChemistry,
-    IbHlEconomics,
-    IbHlMathematics,
-    IbSlMathematics,
-    PlacementBiology,
-    PlacementChemistry,
-    PlacementSpanish,
-    Chem330Lab,
-    Chem350Lab,
-    Chem360Lab,
-    SatSubjectSpanish,
-}
-
-impl fmt::Display for Exam {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Exam::ApBiology => "AP Biology",
-            Exam::ApCalculusAb => "AP Calculus AB",
-            Exam::ApCalculusBc => "AP Calculus BC",
-            Exam::ApChemistry => "AP Chemistry",
-            Exam::ApEnvironmental => "AP Environmental Science",
-            Exam::ApMacroeconomics => "AP Macroeconomics",
-            Exam::ApMicroeconomics => "AP Microeconomics",
-            Exam::ApSpanishLanguage => "AP Spanish Language",
-            Exam::ApSpanishLiterature => "AP Spanish Literature",
-            Exam::IbHlBiology => "IB HL Biology",
-            Exam::IbHlChemistry => "IB SL Chemistry",
-            Exam::IbHlEconomics => "IB HL Economics",
-            Exam::IbHlMathematics => "IB HL Mathematics",
-            Exam::IbSlMathematics => "IB SL Mathematics",
-            Exam::PlacementBiology => "Biology Placement",
-            Exam::PlacementChemistry => "Chemistry Placement",
-            Exam::PlacementSpanish => "Spanish Placement",
-            Exam::SatSubjectSpanish => "SAT Subject Test: Spanish",
-            Exam::Chem330Lab => "Chemistry 330 Lab",
-            Exam::Chem350Lab => "Chemistry 350 Lab",
-            Exam::Chem360Lab => "Chemistry 360 Lab",
-        })
-    }
+#[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
+pub struct Exam {
+    inner: String,
 }
 
 impl FromStr for Exam {
     type Err = ();
     fn from_str(string: &str) -> Result<Exam, ()> {
-        Ok(match string {
-            "AP Biology" => Exam::ApBiology,
-            "AP Calculus AB" => Exam::ApCalculusAb,
-            "AP Calculus BC" => Exam::ApCalculusBc,
-            "AP Chemistry" => Exam::ApChemistry,
-            "AP Environmental Science" => Exam::ApEnvironmental,
-            "AP Macroeconomics" => Exam::ApMacroeconomics,
-            "AP Microeconomics" => Exam::ApMicroeconomics,
-            "AP Spanish Language" => Exam::ApSpanishLanguage,
-            "AP Spanish Literature" => Exam::ApSpanishLiterature,
-            "IB HL Biology" => Exam::IbHlBiology,
-            "IB HL Chemistry" => Exam::IbHlChemistry,
-            "IB HL Economics" => Exam::IbHlEconomics,
-            "IB HL Mathematics" => Exam::IbHlMathematics,
-            "IB SL Mathematics" => Exam::IbSlMathematics,
-            "BIOL Placement Test Min.Score" => Exam::PlacementBiology,
-            "CHEM Placement Test Min. Score" => Exam::PlacementChemistry,
-            "Spanish Placement" => Exam::PlacementSpanish,
-            "SATSubj-Spanish" => Exam::SatSubjectSpanish,
-            "Chemistry 0330 Lab Score" => Exam::Chem330Lab,
-            "Chemistry 0350 Lab Score" => Exam::Chem350Lab,
-            "Chemistry 0360 Lab Score" => Exam::Chem360Lab,
-            _ => panic!("add exam to database: {}", string),
-        })
+        Ok(Exam { inner: string.to_string() })
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
+
+impl fmt::Display for Exam {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.inner)
+    }
+}
+
+
+//#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
+//pub enum Exam {
+//    ApBiology,
+//    ApCalculusAb,
+//    ApCalculusBc,
+//    ApChemistry,
+//    ApEnvironmental,
+//    ApMacroeconomics,
+//    ApMicroeconomics,
+//    ApSpanishLanguage,
+//    ApSpanishLiterature,
+//    ApFrenchLiterature,
+//    IbHlBiology,
+//    IbHlChemistry,
+//    IbHlEconomics,
+//    IbHlMathematics,
+//    IbSlMathematics,
+//    IbHlAnalysis,
+//    PlacementBiology,
+//    PlacementChemistry,
+//    PlacementSpanish,
+//    Chem330Lab,
+//    Chem350Lab,
+//    Chem360Lab,
+//    SatSubjectSpanish,
+//    SatSubjectFrench,
+//}
+//
+//impl fmt::Display for Exam {
+//    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+//        f.write_str(match self {
+//            Exam::ApBiology => "AP Biology",
+//            Exam::ApCalculusAb => "AP Calculus AB",
+//            Exam::ApCalculusBc => "AP Calculus BC",
+//            Exam::ApChemistry => "AP Chemistry",
+//            Exam::ApEnvironmental => "AP Environmental Science",
+//            Exam::ApMacroeconomics => "AP Macroeconomics",
+//            Exam::ApMicroeconomics => "AP Microeconomics",
+//            Exam::ApSpanishLanguage => "AP Spanish Language",
+//            Exam::ApSpanishLiterature => "AP Spanish Literature",
+//            Exam::ApFrenchLiterature => "AP French Literature",
+//            Exam::IbHlBiology => "IB HL Biology",
+//            Exam::IbHlChemistry => "IB SL Chemistry",
+//            Exam::IbHlEconomics => "IB HL Economics",
+//            Exam::IbHlMathematics => "IB HL Mathematics",
+//            Exam::IbSlMathematics => "IB SL Mathematics",
+//            Exam::IbHlAnalysis => "IB HL Math Analysis & Approach",
+//            Exam::PlacementBiology => "Biology Placement",
+//            Exam::PlacementChemistry => "Chemistry Placement",
+//            Exam::PlacementSpanish => "Spanish Placement",
+//            Exam::SatSubjectSpanish => "SAT Subject Test: Spanish",
+//            Exam::SatSubjectFrench => "SAT Subject Test: French",
+//            Exam::Chem330Lab => "Chemistry 330 Lab",
+//            Exam::Chem350Lab => "Chemistry 350 Lab",
+//            Exam::Chem360Lab => "Chemistry 360 Lab",
+//        })
+//    }
+//}
+//
+//impl FromStr for Exam {
+//    type Err = ();
+//    fn from_str(string: &str) -> Result<Exam, ()> {
+//        Ok(match string {
+//            "AP Biology" => Exam::ApBiology,
+//            "AP Calculus AB" => Exam::ApCalculusAb,
+//            "AP Calculus BC" => Exam::ApCalculusBc,
+//            "AP Chemistry" => Exam::ApChemistry,
+//            "AP Environmental Science" => Exam::ApEnvironmental,
+//            "AP Macroeconomics" => Exam::ApMacroeconomics,
+//            "AP Microeconomics" => Exam::ApMicroeconomics,
+//            "AP Spanish Language" => Exam::ApSpanishLanguage,
+//            "AP Spanish Literature" => Exam::ApSpanishLiterature,
+//            "AP French Literature" => Exam::ApFrenchLiterature,
+//            "IB HL Biology" => Exam::IbHlBiology,
+//            "IB HL Chemistry" => Exam::IbHlChemistry,
+//            "IB HL Economics" => Exam::IbHlEconomics,
+//            "IB HL Mathematics" => Exam::IbHlMathematics,
+//            "IB SL Mathematics" => Exam::IbSlMathematics,
+//            "IB HL Math Analysis & Approach" => Exam::IbHlAnalysis,
+//            "BIOL Placement Test Min.Score" => Exam::PlacementBiology,
+//            "CHEM Placement Test Min. Score" => Exam::PlacementChemistry,
+//            "Spanish Placement" => Exam::PlacementSpanish,
+//            "SATSubj-Spanish" => Exam::SatSubjectSpanish,
+//            "SATSubj-French" => Exam::SatSubjectFrench,
+//            "Chemistry 0330 Lab Score" => Exam::Chem330Lab,
+//            "Chemistry 0350 Lab Score" => Exam::Chem350Lab,
+//            "Chemistry 0360 Lab Score" => Exam::Chem360Lab,
+//            _ => panic!("add exam to database: {}", string),
+//        })
+//    }
+//}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CourseCode {
     pub subject: Subject,
     pub number: CourseNumber,
@@ -540,7 +575,7 @@ impl FromStr for CourseCode {
     type Err = ();
     fn from_str(string: &str) -> Result<CourseCode, ()> {
         let mut split = string.split(" ");
-        let subject = Subjects::all().code_from_abbreviation(split.next().ok_or(())?).unwrap();
+        let subject = split.next().ok_or(())?.parse().unwrap();
         let number = split.next().ok_or(())?.parse()?;
         Ok(CourseCode { subject, number })
     }
@@ -554,12 +589,11 @@ impl fmt::Debug for CourseCode {
 
 impl fmt::Display for CourseCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let CourseCode { subject, number } = *self;
-        write!(f, "{} {}", Subjects::all().abbreviation(subject), number)
+        write!(f, "{} {}", self.subject, self.number)
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Ord, PartialOrd, Eq, Hash)]
+#[derive(Clone, PartialEq, Debug, Ord, PartialOrd, Eq, Hash)]
 pub struct CourseNumber {
     four_digit: u16,
     suffix: Option<char>,
