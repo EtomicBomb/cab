@@ -34,20 +34,20 @@ impl Subjects {
         static SUBJECTS: Lazy<Subjects> = Lazy::new(|| {
             let file = BufReader::new(File::open("resources/subjects.txt").unwrap());
 
-            let mut info = HashMap::new();
-
-            for (i, line) in file.lines().enumerate() {
-                let line = line.unwrap();
-                if line.is_empty() { continue }
-                let mut split = line.split(";");
-                let inner = split.next().unwrap().to_string();
-                let row = SubjectInfo {
-                    name: split.next().unwrap().to_string(),
-                    category: split.next().unwrap().parse().unwrap(),
-                    color: split.next().unwrap().to_string(),
-                };
-                info.insert(Subject { inner }, row);
-            }
+            let info = file.lines()
+                .filter_map(Result::ok)
+                .filter(|line| !line.is_empty())
+                .map(|line| {
+                    let mut split = line.split(";");
+                    let inner = split.next().unwrap().to_string();
+                    let info = SubjectInfo {
+                        name: split.next().unwrap().to_string(),
+                        category: split.next().unwrap().parse().unwrap(),
+                        color: split.next().unwrap().to_string(),
+                    };
+                    (Subject { inner }, info)
+                })
+                .collect();
 
             Subjects { info }
         });
@@ -55,8 +55,8 @@ impl Subjects {
         &SUBJECTS
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=Subject> + '_ {
-        self.info.keys().cloned()
+    pub fn iter(&self) -> impl Iterator<Item=&'_ Subject> + '_ {
+        self.info.keys()
     }
 
     pub fn name(&self, code: &Subject) -> &str {

@@ -38,10 +38,10 @@ pub struct SubjectGraph {
 }
 
 impl SubjectGraph {
-    pub fn new(subject: Subject, restrictions: &AllRestrictions, id_generator: &mut IdGenerator) -> SubjectGraph {
+    pub fn new(subject: &Subject, restrictions: &AllRestrictions, id_generator: &mut IdGenerator) -> SubjectGraph {
         let mut ret = SubjectGraph { nodes: Vec::new(), subject: subject.clone() };
 
-        for (course, restrictions) in restrictions.iter().filter(|(course, _)| course.subject == subject) {
+        for (course, restrictions) in restrictions.iter().filter(|(course, _)| &course.subject == subject) {
             let node_index = ret.insert_qualification(&Qualification::Course(course.clone()), id_generator);
 
             if let Some(prereq_tree) = &restrictions.prerequisite_restrictions {

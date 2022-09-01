@@ -1,4 +1,13 @@
+use serde::de::Error;
+use serde::Deserializer;
+use serde::de::Visitor;
+use serde::de::MapAccess;
+use serde::ser::{Serializer, SerializeSeq, SerializeMap};
+use serde::Serialize;
+use serde::ser;
+use std::convert::Infallible;
 use once_cell::sync::Lazy;
+use serde::{Deserialize};
 use regex::Regex;
 use std::fmt;
 use std::collections::{HashMap, HashSet};
@@ -8,7 +17,6 @@ use std::io::{BufReader, BufRead};
 use std::fs::File;
 use crate::subject::{Subject, Subjects};
 use crate::normalize::normalize;
-use crate::parse_prerequisite_string::{parse_prerequisite_string};
 use std::iter::Sum;
 use std::ops::Add;
 use serde_json::Value;
@@ -85,7 +93,7 @@ fn override_required(course_code: &CourseCode, root: &Value) -> bool {
         file.lines()
             .filter_map(|line| line.ok())
             .filter(|line| !line.is_empty())
-            .map(|line| line.parse().unwrap())
+            .map(|line| line.as_str().try_into().unwrap())
             .collect()
     });
 
@@ -105,7 +113,7 @@ fn informal_prerequisite(course_code: &CourseCode) -> bool {
         file.lines()
             .filter_map(|line| line.ok())
             .filter(|line| !line.is_empty())
-            .map(|line| line.parse().unwrap())
+            .map(|line| line.as_str().try_into().unwrap())
             .collect()
     });
 
@@ -300,8 +308,8 @@ fn prerequisite_tree_from_correction(course_code: &CourseCode) -> Option<Prerequ
             let line = line.unwrap();
             if line.is_empty() { continue }
             let mut columns = line.split(";");
-            let course: CourseCode = columns.next().unwrap().parse().unwrap();
-            let tree = parse_prerequisite_string(columns.next().unwrap()).unwrap();
+            let course: CourseCode = columns.next().unwrap().try_into().unwrap();
+            let tree = columns.next().unwrap().try_into().unwrap();
             ret.insert(course, tree);
         }
 
@@ -323,24 +331,8 @@ impl PrerequisiteTree {
         static TAG_REMOVE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<.*?>"#).unwrap());
         let prerequisites = &PREREQ_INNER.captures(restrictions)?[1];
         let tags_removed = TAG_REMOVE.replace_all(prerequisites, "");
-        let tree = parse_prerequisite_string(&tags_removed).unwrap();
-
-        let tree = tree.remove_graduate().unwrap();
-
+        let tree = tags_removed.as_ref().try_into().unwrap();
         Some(tree)
-    }
-
-    fn remove_graduate(self) -> Option<PrerequisiteTree> {
-        match self {
-            PrerequisiteTree::Qualification(Qualification::ExamScore(ScoreQualification::GraduateWaive)) => None,
-            PrerequisiteTree::Qualification(_) => Some(self),
-            PrerequisiteTree::Conjunctive(conj, children) => {
-                let new_children = children.into_iter()
-                    .filter_map(PrerequisiteTree::remove_graduate)
-                    .collect();
-                Some(PrerequisiteTree::Conjunctive(conj, new_children))
-            }
-        }
     }
 
     pub fn qualifications_set(&self) -> HashSet<Qualification> {
@@ -357,12 +349,6 @@ impl PrerequisiteTree {
         }
 
         ret
-    }
-}
-
-impl Default for PrerequisiteTree {
-    fn default() -> Self {
-        PrerequisiteTree::Conjunctive(Conjunctive::Any, vec![])
     }
 }
 
@@ -385,10 +371,90 @@ impl fmt::Display for PrerequisiteTree {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+impl ser::Serialize for PrerequisiteTree {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            PrerequisiteTree::Qualification(Qualification::Course(course)) => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("course", course)?;
+                map.end()
+            }
+            PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { exam, score })) => {
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("exam", exam)?;
+                map.serialize_entry("score", score)?;
+                map.end()
+            }
+            PrerequisiteTree::Conjunctive(conjunctive, children) => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                let conjunctive = conjunctive.to_string();
+                map.serialize_entry(conjunctive.as_str(), children)?; 
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for PrerequisiteTree {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct PrerequisiteTreeVisitor;
+
+        impl<'de> Visitor<'de> for PrerequisiteTreeVisitor {
+            type Value = PrerequisiteTree;
+
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(r#"{"code": "<>"} or {"exam": "<>", "score": <>}"#)
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let missing_field = "missing `code`, `exam`, `score`, `or`, or `and`";
+                let key = map.next_key()?.ok_or(Error::missing_field(missing_field))?;
+
+                match key {
+                    "course" => Ok(PrerequisiteTree::Qualification(Qualification::Course(
+                        map.next_value::<CourseCode>()?
+                        ))),
+                    "exam" => Ok(PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { 
+                        exam: map.next_value()?,
+                        score: {
+                            let (key, value): (&str, _) = map.next_entry()?.ok_or(Error::missing_field("score"))?;
+                            if key != "score" {
+                                return Err(Error::missing_field("thing"));
+                            }
+                            value
+                        }
+                    }))),
+                    "score" => Ok(PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { 
+                        score: map.next_value()?,
+                        exam: {
+                            let (key, value): (&str, _) = map.next_entry()?.ok_or(Error::missing_field("exam"))?;
+                            if key != "exam" {
+                                return Err(Error::missing_field("thing"))
+                            }
+                            value
+                        }
+                    }))),
+                    "any" => Ok(PrerequisiteTree::Conjunctive(
+                        Conjunctive::Any,
+                        map.next_value()?,
+                    )),
+                    "all" => Ok(PrerequisiteTree::Conjunctive(
+                        Conjunctive::All,
+                        map.next_value()?,
+                    )),
+                    _ => Err(Error::missing_field(missing_field)),
+                }
+            }
+        }
+
+        deserializer.deserialize_map(PrerequisiteTreeVisitor)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub enum Qualification {
     Course(CourseCode),
-    ExamScore(ScoreQualification),
+    ExamScore(ExamScore),
 }
 
 impl fmt::Display for Qualification {
@@ -400,9 +466,8 @@ impl fmt::Display for Qualification {
     }
 }
 
-
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "lowercase")]
 pub enum Conjunctive {
     Any,
     All,
@@ -417,43 +482,37 @@ impl fmt::Display for Conjunctive {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
-pub enum ScoreQualification {
-    GraduateWaive,
-    ExamScore(Exam, u16),
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
+pub struct ExamScore {
+    exam: Exam,
+    score: u16,
 }
 
-impl fmt::Display for ScoreQualification {
+impl fmt::Display for ExamScore {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ScoreQualification::GraduateWaive => f.write_str("graduate skip class"),
-            ScoreQualification::ExamScore(exam, score) => write!(f, "{} in {}", score, exam),
-        }
+        write!(f, "{} in {}", self.score, self.exam)
     }
 }
 
-impl ScoreQualification {
-    pub fn from_exam_score(exam: &str, score: &str) -> Result<ScoreQualification, ()> {
-        Ok(if exam == "Graduate Student PreReq" {
-            ScoreQualification::GraduateWaive
-        } else {
-            let exam = exam.parse().map_err(|_| ())?;
-            let score = score.parse().map_err(|_| ())?;
-            ScoreQualification::ExamScore(exam, score)
-        })
+impl ExamScore {
+    pub fn from_exam_score(exam: &str, score: &str) -> Result<Self, ()> {
+        let exam = exam.parse().map_err(|_| ())?;
+        let score = score.parse().map_err(|_| ())?;
+        Ok(ExamScore { exam, score })
     }
 }
 
-impl FromStr for ScoreQualification {
+impl FromStr for ExamScore {
     type Err = ();
-    fn from_str(string: &str) -> Result<ScoreQualification, ()> {
+    fn from_str(string: &str) -> Result<ExamScore, ()> {
         static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"minimum score of (.*?) in '(.*?)'").unwrap());
         let captures = REGEX.captures(string).unwrap();
-        ScoreQualification::from_exam_score(&captures[1], &captures[2])
+        ExamScore::from_exam_score(&captures[1], &captures[2])
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
+#[serde(transparent)]
 pub struct Exam {
     inner: String,
 }
@@ -472,111 +531,20 @@ impl fmt::Display for Exam {
     }
 }
 
-
-//#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
-//pub enum Exam {
-//    ApBiology,
-//    ApCalculusAb,
-//    ApCalculusBc,
-//    ApChemistry,
-//    ApEnvironmental,
-//    ApMacroeconomics,
-//    ApMicroeconomics,
-//    ApSpanishLanguage,
-//    ApSpanishLiterature,
-//    ApFrenchLiterature,
-//    IbHlBiology,
-//    IbHlChemistry,
-//    IbHlEconomics,
-//    IbHlMathematics,
-//    IbSlMathematics,
-//    IbHlAnalysis,
-//    PlacementBiology,
-//    PlacementChemistry,
-//    PlacementSpanish,
-//    Chem330Lab,
-//    Chem350Lab,
-//    Chem360Lab,
-//    SatSubjectSpanish,
-//    SatSubjectFrench,
-//}
-//
-//impl fmt::Display for Exam {
-//    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-//        f.write_str(match self {
-//            Exam::ApBiology => "AP Biology",
-//            Exam::ApCalculusAb => "AP Calculus AB",
-//            Exam::ApCalculusBc => "AP Calculus BC",
-//            Exam::ApChemistry => "AP Chemistry",
-//            Exam::ApEnvironmental => "AP Environmental Science",
-//            Exam::ApMacroeconomics => "AP Macroeconomics",
-//            Exam::ApMicroeconomics => "AP Microeconomics",
-//            Exam::ApSpanishLanguage => "AP Spanish Language",
-//            Exam::ApSpanishLiterature => "AP Spanish Literature",
-//            Exam::ApFrenchLiterature => "AP French Literature",
-//            Exam::IbHlBiology => "IB HL Biology",
-//            Exam::IbHlChemistry => "IB SL Chemistry",
-//            Exam::IbHlEconomics => "IB HL Economics",
-//            Exam::IbHlMathematics => "IB HL Mathematics",
-//            Exam::IbSlMathematics => "IB SL Mathematics",
-//            Exam::IbHlAnalysis => "IB HL Math Analysis & Approach",
-//            Exam::PlacementBiology => "Biology Placement",
-//            Exam::PlacementChemistry => "Chemistry Placement",
-//            Exam::PlacementSpanish => "Spanish Placement",
-//            Exam::SatSubjectSpanish => "SAT Subject Test: Spanish",
-//            Exam::SatSubjectFrench => "SAT Subject Test: French",
-//            Exam::Chem330Lab => "Chemistry 330 Lab",
-//            Exam::Chem350Lab => "Chemistry 350 Lab",
-//            Exam::Chem360Lab => "Chemistry 360 Lab",
-//        })
-//    }
-//}
-//
-//impl FromStr for Exam {
-//    type Err = ();
-//    fn from_str(string: &str) -> Result<Exam, ()> {
-//        Ok(match string {
-//            "AP Biology" => Exam::ApBiology,
-//            "AP Calculus AB" => Exam::ApCalculusAb,
-//            "AP Calculus BC" => Exam::ApCalculusBc,
-//            "AP Chemistry" => Exam::ApChemistry,
-//            "AP Environmental Science" => Exam::ApEnvironmental,
-//            "AP Macroeconomics" => Exam::ApMacroeconomics,
-//            "AP Microeconomics" => Exam::ApMicroeconomics,
-//            "AP Spanish Language" => Exam::ApSpanishLanguage,
-//            "AP Spanish Literature" => Exam::ApSpanishLiterature,
-//            "AP French Literature" => Exam::ApFrenchLiterature,
-//            "IB HL Biology" => Exam::IbHlBiology,
-//            "IB HL Chemistry" => Exam::IbHlChemistry,
-//            "IB HL Economics" => Exam::IbHlEconomics,
-//            "IB HL Mathematics" => Exam::IbHlMathematics,
-//            "IB SL Mathematics" => Exam::IbSlMathematics,
-//            "IB HL Math Analysis & Approach" => Exam::IbHlAnalysis,
-//            "BIOL Placement Test Min.Score" => Exam::PlacementBiology,
-//            "CHEM Placement Test Min. Score" => Exam::PlacementChemistry,
-//            "Spanish Placement" => Exam::PlacementSpanish,
-//            "SATSubj-Spanish" => Exam::SatSubjectSpanish,
-//            "SATSubj-French" => Exam::SatSubjectFrench,
-//            "Chemistry 0330 Lab Score" => Exam::Chem330Lab,
-//            "Chemistry 0350 Lab Score" => Exam::Chem350Lab,
-//            "Chemistry 0360 Lab Score" => Exam::Chem360Lab,
-//            _ => panic!("add exam to database: {}", string),
-//        })
-//    }
-//}
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(try_from = "&str")]
+#[serde(into = "String")]
 pub struct CourseCode {
     pub subject: Subject,
     pub number: CourseNumber,
 }
 
-impl FromStr for CourseCode {
-    type Err = ();
-    fn from_str(string: &str) -> Result<CourseCode, ()> {
+impl<'a> TryFrom<&'a str> for CourseCode {
+    type Error = Infallible;
+    fn try_from(string: &'a str) -> Result<Self, Self::Error> {
         let mut split = string.split(" ");
-        let subject = split.next().ok_or(())?.parse().unwrap();
-        let number = split.next().ok_or(())?.parse()?;
+        let subject = split.next().unwrap().parse().unwrap();
+        let number = split.next().unwrap().parse().unwrap();
         Ok(CourseCode { subject, number })
     }
 }
@@ -590,6 +558,12 @@ impl fmt::Debug for CourseCode {
 impl fmt::Display for CourseCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.subject, self.number)
+    }
+}
+
+impl From<CourseCode> for String {
+    fn from(item: CourseCode) -> String {
+        item.to_string()
     }
 }
 

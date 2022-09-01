@@ -1,64 +1,71 @@
 use crate::subject::Subject;
 use std::collections::HashMap;
-use crate::restrictions::{Conjunctive, PrerequisiteTree, Qualification, ScoreQualification, CourseCode};
+use crate::restrictions::{Conjunctive, PrerequisiteTree, Qualification, ExamScore, CourseCode};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::fmt;
 use crate::subject::Subjects;
 use std::fmt::{Formatter, Write};
 
-// GRAMMAR:
-// top      = any_expr Eoi
-// any_expr = and_expr (Any and_expr)*
-// and_expr = base (All base)*
-// base     = Course | ExamScore | LeftParen any_expr RightParen
-pub fn parse_prerequisite_string(string: &str) -> Result<PrerequisiteTree, PrerequisiteStringError> {
-    let mut tokens = TokenStream::from_string(string)?;
-    let ret = parse_any_expr(&mut tokens);
-    tokens.consume_token(&TokenKind::Eoi)?;
-    ret
+/// # Grammar
+/// Class | Rules
+/// ---|---
+/// top      | any_expr Eoi
+/// any_expr | and_expr (Any and_expr)*
+/// and_expr | base (All base)*
+/// base     | Course \| ExamScore \| LeftParen any_expr RightParen
+
+impl<'a> TryFrom<&'a str> for PrerequisiteTree {
+    type Error = PrerequisiteStringError<'a>;
+    fn try_from(string: &'a str) -> Result<Self, Self::Error> {
+        let mut tokens = TokenStream::from_string(string)?;
+        let ret = parse_any_expr(&mut tokens);
+        tokens.consume_token(&TokenKind::Eoi)?;
+        ret
+    }
 }
 
 fn parse_any_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<PrerequisiteTree, PrerequisiteStringError<'a>> {
     let mut ret = Vec::new();
     let token = parse_all_expr(tokens)?;
-    ret.push(token);
+    ret.extend(token);
 
     while tokens.peek_token()?.kind == TokenKind::Conjunctive(Conjunctive::Any) {
         tokens.consume_token(&TokenKind::Conjunctive(Conjunctive::Any))?;
         let token = parse_all_expr(tokens)?;
-        ret.push(token);
+        ret.extend(token);
     }
 
-    if ret.len() == 1 { Ok(ret.pop().unwrap()) }
+    if ret.len() < 2 { Ok(ret.pop().unwrap()) }
     else { Ok(PrerequisiteTree::Conjunctive(Conjunctive::Any, ret)) }
 }
 
-fn parse_all_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<PrerequisiteTree, PrerequisiteStringError<'a>> {
+fn parse_all_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Option<PrerequisiteTree>, PrerequisiteStringError<'a>> {
     let mut ret = Vec::new();
     let token = parse_bottom(tokens)?;
-    ret.push(token);
+    ret.extend(token);
 
     while tokens.peek_token()?.kind == TokenKind::Conjunctive(Conjunctive::All) {
         tokens.consume_token(&TokenKind::Conjunctive(Conjunctive::All))?;
         let token = parse_bottom(tokens)?;
-        ret.push(token);
+        ret.extend(token);
     }
 
-    if ret.len() == 1 { Ok(ret.pop().unwrap()) }
-    else { Ok(PrerequisiteTree::Conjunctive(Conjunctive::All, ret)) }
+    if ret.len() < 2 { Ok(ret.pop()) }
+    else { Ok(Some(PrerequisiteTree::Conjunctive(Conjunctive::All, ret))) }
 }
 
-fn parse_bottom<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<PrerequisiteTree, PrerequisiteStringError<'a>> {
+fn parse_bottom<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Option<PrerequisiteTree>, PrerequisiteStringError<'a>> {
     let token = tokens.peek_token()?;
     tokens.consume_token(&token.kind)?;
 
     match token.kind {
-        TokenKind::Qualification(qual) => Ok(PrerequisiteTree::Qualification(qual)),
+        TokenKind::Qualification(qual) => Ok(Some(PrerequisiteTree::Qualification(qual))),
+        TokenKind::GraduateStudentWaive => Ok(None),
         TokenKind::LeftParen => {
             let ret = parse_any_expr(tokens)?;
             tokens.consume_token(&TokenKind::RightParen)?;
-            Ok(ret)
+            Ok(Some(ret))
         },
         _ => Err(PrerequisiteStringError::ExpectedLeftParenOrQualification { found: token }),
     }
@@ -130,7 +137,11 @@ pub struct Span<'a> {
 
 impl<'a> fmt::Display for Span<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}\x1b[7m{}\x1b[m{}", &self.input[..self.start], &self.input[self.start..self.end], &self.input[self.end..])
+        write!(f, "{}[{}]{}", 
+            &self.input[..self.start], 
+            &self.input[self.start..self.end], 
+            &self.input[self.end..]
+        )
     }
 }
 
@@ -141,6 +152,7 @@ pub enum TokenKind {
     Comma,
     LeftParen,
     RightParen,
+    GraduateStudentWaive,
     Eoi,
 }
 
@@ -152,13 +164,14 @@ impl fmt::Display for TokenKind {
             TokenKind::Comma => f.write_str(","),
             TokenKind::LeftParen => f.write_str("("),
             TokenKind::RightParen => f.write_str(")"),
+            TokenKind::GraduateStudentWaive => f.write_str("graduate student waive"),
             TokenKind::Eoi => f.write_str("end of input"),
         }
     }
 }
 
 fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
-    static TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"^( |and|or|,|\(|\)|minimum score of (?P<score>.*?) in '(?P<exam>.*?)'|((?P<subj>[A-Z]{3,4}) )?(?P<num>\d{4}[A-Z]?)\*?)").unwrap());
+    static TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"^( |and|or|,|\(|\)|minimum score of WAIVE in 'Graduate Student PreReq'|minimum score of (?P<score>\d*?) in '(?P<exam>.*?)'|((?P<subj>[A-Z]{3,4}) )?(?P<num>\d{4}[A-Z]?)\*?)").unwrap());
 
     let mut last_subject = None;
 
@@ -178,13 +191,14 @@ fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
 
         let kind = match entire_match {
             " " => continue,
+            "minimum score of WAIVE in 'Graduate Student PreReq'" => TokenKind::GraduateStudentWaive,
             "and" => TokenKind::Conjunctive(Conjunctive::All),
             "or" => TokenKind::Conjunctive(Conjunctive::Any),
             "," => TokenKind::Comma,
             "(" => TokenKind::LeftParen,
             ")" => TokenKind::RightParen,
             _ if captures.name("score").is_some() => {
-                TokenKind::Qualification(Qualification::ExamScore(ScoreQualification::from_exam_score(&captures["exam"], &captures["score"]).unwrap()))
+                TokenKind::Qualification(Qualification::ExamScore(ExamScore::from_exam_score(&captures["exam"], &captures["score"]).unwrap()))
             },
             _ if captures.name("num").is_some() => {
                 if let Some(subject) = captures.name("subj") {
@@ -212,10 +226,8 @@ fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
     Ok(ret)
 }
 
-
 #[derive(Clone)]
 pub enum PrerequisiteStringError<'a> {
-    NoConjunctiveForComma { token: Token<'a> },
     InvalidToken { string: &'a str, start: usize },
     ExpectedToken { expected: TokenKind, found: Token<'a> },
     BadSubject { span: Span<'a> },
@@ -227,12 +239,10 @@ pub enum PrerequisiteStringError<'a> {
 impl<'a> fmt::Debug for PrerequisiteStringError<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            PrerequisiteStringError::NoConjunctiveForComma { token } =>
-                write!(f, "'{}': no conjunctive found for comma", token.span),
             PrerequisiteStringError::InvalidToken { string, start } =>
-                write!(f, "'{} [ {}': invalid token", &string[..*start], &string[*start..]),
+                write!(f, "'{} [{}]': invalid token", &string[..*start], &string[*start..]),
             PrerequisiteStringError::ExpectedToken { expected, found } =>
-                write!(f, "'{}': expected token {}", found.span, expected),
+                write!(f, "'{}': expected {}", found.span, expected),
             PrerequisiteStringError::BadSubject { span } =>
                 write!(f, "'{}': subject could not be found in database", span),
             PrerequisiteStringError::NoSubjectContext { span: location } =>

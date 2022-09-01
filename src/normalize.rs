@@ -1,9 +1,8 @@
-use crate::restrictions::{PrerequisiteTree, Qualification, ScoreQualification};
+use crate::restrictions::{PrerequisiteTree, Qualification, ExamScore};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::io::{BufReader, BufRead};
 use std::fs::File;
-use crate::parse_prerequisite_string::parse_prerequisite_string;
 
 // needs: distributive laws
 
@@ -31,7 +30,7 @@ fn equivalent(tree: PrerequisiteTree) -> PrerequisiteTree {
         let mut ret = HashMap::new();
         for line in file.lines() {
             let line = line.unwrap();
-            let tree = parse_prerequisite_string(&line).unwrap();
+            let tree: PrerequisiteTree = line.as_str().try_into().unwrap();
             let set = tree.qualifications_set();
             ret.extend(set.into_iter().map(|q| (q, tree.clone())));
         }
@@ -79,10 +78,10 @@ fn exam_score_overlap(tree: &PrerequisiteTree) -> PrerequisiteTree {
 
             children.dedup_by(|a, b| match (a, b) {
                 (x, y) if x == y => true,
-                (
-                    PrerequisiteTree::Qualification(Qualification::ExamScore(ScoreQualification::ExamScore(a0, _))),
-                    PrerequisiteTree::Qualification(Qualification::ExamScore(ScoreQualification::ExamScore(b0, _)))
-                ) => a0 == b0,
+//                (
+//                    PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { exam: a0, .. })),
+//                    PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { exam: b0, .. }))
+//                ) => a0 == b0,
                 _ => false,
             });
 

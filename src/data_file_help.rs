@@ -8,7 +8,7 @@ use serde_json::Value;
 pub fn look_for_override_corrections(restrictions: &HashMap<CourseCode, RegistrationRestrictions>) {
     for course in fs::read_dir("resources/scraped").unwrap() {
         let course = course.unwrap().path();
-        let course_code: CourseCode = course.file_stem().unwrap().to_str().unwrap().parse().unwrap();
+        let course_code: CourseCode = course.file_stem().unwrap().to_str().unwrap().try_into().unwrap();
 
         let should_look = !restrictions[&course_code].override_required;
 
@@ -36,7 +36,7 @@ pub fn look_for_override_corrections(restrictions: &HashMap<CourseCode, Registra
 pub fn look_for_prerequisite_corrections(restrictions: &HashMap<CourseCode, RegistrationRestrictions>) {
     for course in fs::read_dir("resources/scraped").unwrap() {
         let course = course.unwrap().path();
-        let course_code: CourseCode = course.file_stem().unwrap().to_str().unwrap().parse().unwrap();
+        let course_code: CourseCode = course.file_stem().unwrap().to_str().unwrap().try_into().unwrap();
 
         let should_look = restrictions[&course_code].prerequisite_restrictions.is_none()
             && !restrictions[&course_code].informal_prerequisite

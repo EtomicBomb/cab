@@ -107,8 +107,8 @@ The most recent present qualification is chosen to be the cannonical one for the
         ]
     },
     "semester": {"start": 3, "end": 14}, // nullable
-    "level": "undergraduate", // nullable
     "restricted": true,
+    "aliases": [],
     "offerings": [ // most recent first?
         {
             "date": "Spring 2022",

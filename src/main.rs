@@ -40,9 +40,20 @@ use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() {
+    transform();
+}
 
-    let file = std::fs::File::open("all.json").unwrap();
-    process::process(serde_json::de::IoRead::new(&file));
+pub fn transform() {
+    let input = std::fs::File::open("all.json").unwrap();
+    let results = process::process(serde_json::de::IoRead::new(&input));
+    eprintln!("writing");
+
+    let mut output = std::fs::File::create("output/courses.json").unwrap();
+    for result in results.iter() {
+        serde_json::to_writer_pretty(&mut output, result).unwrap();
+        output.write_all(b"\n").unwrap();
+    }
+
 }
 
 //#[tokio::main]
@@ -137,7 +148,7 @@ fn svg_filter(svg: &mut String, restrictions: &AllRestrictions) {
 
     while let Some(location) = REGEX.captures(&svg) {
         let entire_range = location.get(0).unwrap().range();
-        let course_code = location[1].parse().unwrap();
+        let course_code = location[1].try_into().unwrap();
         let top_left_x = location[2].parse::<f32>().unwrap()-102.0;
         let top_left_y = location[3].parse().unwrap();
         let new_text = restrictions.svg(course_code, top_left_x, top_left_y);
@@ -204,7 +215,7 @@ impl AllRestrictions {
         let map = fs::read_dir(path)?
             .map(|course| {
                 let course = course?.path();
-                let course_code: CourseCode = course.file_stem().unwrap().to_str().unwrap().parse().unwrap();
+                let course_code: CourseCode = course.file_stem().unwrap().to_str().unwrap().try_into().unwrap();
 
                 let restriction = fs::read_dir(course)?
                     .map(|variant| {

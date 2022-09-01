@@ -1,13 +1,16 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::num::ParseIntError;
 use crate::restrictions::PrerequisiteTree;
 use std::borrow::Cow;
 use once_cell::sync::Lazy;
-use crate::parse_prerequisite_string::parse_prerequisite_string;
 use regex::Regex;
 use regex::NoExpand;
 use std::convert::Infallible;
 use serde::Deserializer;
 use serde::Deserialize;
+use serde::Serialize;
+use std::iter;
 use serde_json::StreamDeserializer;
 use serde_json::de;
 use std::str::FromStr;
@@ -44,7 +47,8 @@ fn enrollment_from_html(string: &str) -> Option<u16> {
     ENROLLMENT.captures(string).map(|captures| captures.get(1).unwrap().as_str().parse().unwrap())
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Debug)]
+#[serde(transparent)]
 struct CourseCode {
     inner: String,
 }
@@ -59,11 +63,10 @@ impl FromStr for CourseCode {
 
 fn section(string: &str) -> Option<u8> {
     static SECTION: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^S(\d{2})$"#).unwrap());
-
     SECTION.captures(string).map(|captures| captures.get(1).unwrap().as_str().parse().unwrap())
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum Title {
     AliasOf(CourseCode),
     Title(String),
@@ -83,7 +86,7 @@ impl FromStr for Title {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Demographics {
     #[serde(default)]
     #[serde(alias = "FY")]
@@ -117,25 +120,40 @@ fn strip_html(string: &str) -> String {
     string.to_string()
 }
 
-#[derive(Copy, Debug, Clone)]
-struct SemesterRange {
+#[derive(Serialize, Deserialize)]
+struct Semester { 
     inner: u16,
 }
 
-struct Semester { 
-    inner: u16,
+impl fmt::Display for Semester {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.inner {
+            13 => f.write_str("GM"),
+            14 => f.write_str("GP"),
+            s => write!(f, "{:02}", s+1),
+        }
+    }
 }
 
 impl FromStr for Semester {
     type Err = ParseIntError;
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        Ok(Semester { inner: match string {
+        let semester_number = match string {
             "GM" => 14,
             "GP" => 15,
             "F2" => 2,
             s => s.parse()?,
-        }})
+        };
+
+        Ok(Semester { inner: semester_number - 1 })
     }
+}
+
+#[derive(Serialize, Deserialize, Copy, Debug, Clone)]
+#[serde(try_from = "&str")]
+#[serde(into = "String")]
+struct SemesterRange {
+    inner: u16,
 }
 
 impl SemesterRange {
@@ -149,27 +167,89 @@ impl SemesterRange {
     }
 
     fn add(self, semester: Semester) -> Self {
-        SemesterRange { inner: self.inner | (semester.inner - 1) }
+        SemesterRange { inner: self.inner | (1 << (semester.inner)) }
     }
 
-    fn from_str(string: &str) -> SemesterRange {
-        static DELIM: Lazy<Regex> = Lazy::new(|| Regex::new(r#", | or "#).unwrap());
-        DELIM.split(string)
-            .map(Semester::from_str)
-            .map(Result::unwrap)
-            .fold(SemesterRange::EMPTY, SemesterRange::add)
-    }
 
     const fn complement(self) -> Self {
-        SemesterRange { inner: !self.inner & SemesterRange::FULL.inner }
+        SemesterRange { inner: self.inner ^ SemesterRange::FULL.inner }
     }
 
     fn intersection(self, other: Self) -> Self {
         SemesterRange { inner: self.inner & other.inner }
     }
 
-    fn contiguous(self) -> Option<(u16, u16)> {
-        todo!()
+    fn semesters(self) -> impl Iterator<Item=Semester> {
+        let mut inner = self.inner;
+        iter::from_fn(move || {
+            if inner == 0 { return None }
+            let semester = inner.trailing_zeros();   
+            inner &= !(1 << semester);
+            Some(Semester { inner: semester as u16 })
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Semester, SemesterRange};
+    use std::str::FromStr;
+
+    #[test]
+    fn semseter_range() {
+        let text = "05, 06, 07, 08, 09, 10, 11, 12 or 13";
+        let range = SemesterRange::try_from(text).unwrap();
+        assert_eq!(range.to_string(), "05, 06, 07, 08, 09, 10, 11, 12, 13");
+        let compl = range.complement();
+        assert_eq!(compl.to_string(), "01, 02, 03, 04, GM, GP");
+    }
+
+    #[test]
+    fn semseter_range2() {
+        let text = "05, 06, 07, 08, 09, 10, 11, 12 or 13";
+        let range = SemesterRange::try_from(text).unwrap();
+        assert_eq!(range.to_string(), "05, 06, 07, 08, 09, 10, 11, 12, 13", "{}", range.inner);
+    }
+    
+    #[test]
+    fn semseter_range3() {
+        let range = SemesterRange::EMPTY;
+        let range = range.add(Semester::from_str("05").unwrap());
+        assert_eq!(range.to_string(), "05", "{}", range.inner);
+    }
+
+    #[test]
+    fn semseter_range4() {
+        let range = SemesterRange::to(4);
+        assert_eq!(range.to_string(), "01, 02, 03, 04", "{}", range.inner);
+    }
+}
+
+impl<'a> TryFrom<&'a str> for SemesterRange {
+    type Error = Infallible;
+    fn try_from(string: &'a str) -> Result<Self, Self::Error> {
+        static DELIM: Lazy<Regex> = Lazy::new(|| Regex::new(r#", | or "#).unwrap());
+        Ok(DELIM.split(string)
+            .map(Semester::from_str)
+            .map(Result::unwrap)
+            .fold(SemesterRange::EMPTY, SemesterRange::add))
+    }
+}
+
+impl fmt::Display for SemesterRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut sep = "";
+        for semester in self.semesters() {
+            write!(f, "{sep}{semester}")?;
+            sep = ", ";
+        }
+        Ok(())
+    }
+}
+
+impl From<SemesterRange> for String {
+    fn from(item: SemesterRange) -> String {
+        item.to_string()
     }
 }
 
@@ -188,7 +268,7 @@ fn program_string(string: &str) -> Vec<String> {
 
 #[derive(Debug)]
 struct Qualifications {
-    prerequisites: PrerequisiteTree,
+    prerequisites: Option<PrerequisiteTree>,
     programs: Option<Vec<String>>,
     semester_range: SemesterRange,
 }
@@ -205,24 +285,21 @@ impl FromStr for Qualifications {
             .map(regex::Match::as_str)
             .map(strip_html)
             .as_deref()
-            .map(parse_prerequisite_string)
-            .map(Result::unwrap)
-            .unwrap_or_default();
-
-        if let Some(captures) = captures.name("cls") {
-            println!("{}", captures.as_str());
-        }
+            .map(PrerequisiteTree::try_from)
+            .map(Result::unwrap);
 
         let semester_level = captures.name("cls")
             .as_ref()
             .map(regex::Match::as_str)
-            .map(SemesterRange::from_str)
+            .map(SemesterRange::try_from)
+            .map(Result::unwrap)
             .unwrap_or_default();
 
         let semester_level_complement = captures.name("clsc")
             .as_ref()
             .map(regex::Match::as_str)
-            .map(SemesterRange::from_str)
+            .map(SemesterRange::try_from)
+            .map(Result::unwrap)
             .map(SemesterRange::complement)
             .unwrap_or_default();
 
@@ -250,6 +327,14 @@ impl FromStr for Qualifications {
     }
 }
 
+fn instructors(string: &str) -> Vec<String> {
+    static NAME: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<h4>.*?</h4>"#).unwrap());
+    NAME.find_iter(string)
+        .map(|name| strip_html(name.as_str()))
+        .filter(|name| name != "TBD")
+        .collect()
+}
+
 #[derive(Debug)]
 struct Record {
     restricted: bool, 
@@ -259,6 +344,7 @@ struct Record {
     description: String,
     qualifications: Qualifications, 
     enrollment: Option<u16>,
+    instructors: Vec<String>,
     demographics: Option<Demographics>,
     srcdb: String, 
 }
@@ -282,9 +368,10 @@ impl From<Raw> for Record {
         let enrollment_seats = enrollment_from_seats(&raw.seats);
         let enrollment_html = enrollment_from_html(&raw.regdemog_html);
         let enrollment = enrollment_seats.or(enrollment_html);
+        let instructors = instructors(&raw.instructordetail_html);
         let demographics = serde_json::from_str(&raw.regdemog_json).ok();
         let srcdb = raw.srcdb;
-        Record { restricted, code, section, title, description, qualifications, enrollment, demographics, srcdb }
+        Record { restricted, code, section, title, description, qualifications, enrollment, instructors, demographics, srcdb }
     }
 }
 
@@ -297,23 +384,103 @@ struct Raw {
     description: String,
     registration_restrictions: String,
     seats: String,
+    instructordetail_html: String,
     regdemog_html: String,
     regdemog_json: String,
     srcdb: String,
 }
 
 pub fn process<'a, R: de::Read<'a>>(
-    source: R
-) {
-    let raws = StreamDeserializer::<_, Raw>::new(source);
+    source: R,
+) -> Vec<Course> {
+    #[derive(Default)]
+    struct Details {
+        offerings: Vec<Record>,
+        aliases: HashSet<CourseCode>,
+    }
 
-    for raw in raws {
-        if let Ok(raw) = raw {
-            println!("{raw:#?}");
-            let record = Record::from(raw);
-            println!("{record:#?}");
+    let mut map: HashMap<CourseCode, Details> = HashMap::new();
+
+    StreamDeserializer::<_, Raw>::new(source)
+        .filter_map(Result::ok)
+        .map(Record::from)
+        .for_each(|record| {
+            match record.title {
+                Title::Title(_) if record.section.is_some() => {
+                    map.entry(record.code.clone()).or_default().offerings.push(record);
+                }, 
+                Title::AliasOf(cannonical) => {
+                    map.entry(cannonical).or_default().aliases.insert(record.code);
+                },
+                _ => {},
+            }
+        });
+
+    map.into_iter()
+        .filter(|(_, Details { offerings, .. })| !offerings.is_empty())
+        .map(|(code, Details { offerings, aliases })| {
+            let aliases = aliases.into_iter().collect();
+            Course::from_offerings(code, offerings, aliases)
+        })
+        .collect()
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Course {
+    code: CourseCode,
+    title: String,
+    description: String,
+    prerequisites: Option<PrerequisiteTree>,
+    semester_range: SemesterRange,
+    restricted: bool,
+    aliases: Vec<CourseCode>,
+    offerings: Vec<Offering>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Offering {
+    date: String,
+    section: u8,
+    instructors: Vec<String>,
+    enrollment: Option<u16>,
+    demographics: Option<Demographics>,
+}
+
+impl Course {
+    fn from_offerings(code: CourseCode, mut offerings: Vec<Record>, aliases: Vec<CourseCode>) -> Course {
+        offerings.sort_by(|a, b| a.srcdb.cmp(&b.srcdb).reverse()); // recent first
+        let latest = offerings.first().unwrap();
+
+        let title = match latest.title {
+            Title::Title(ref t) => t.clone(),
+            _ => unreachable!("method precondition"),
+        };
+        let description = latest.description.clone();
+        let prerequisites = offerings.iter()
+            .find_map(|offering| offering.qualifications.prerequisites.as_ref())
+            .cloned();
+        let semester_range = latest.qualifications.semester_range;
+        let restricted = latest.restricted;
+
+        let offerings = offerings.into_iter()
+            .map(|offering| Offering {
+                date: offering.srcdb,
+                section: offering.section.unwrap(),
+                instructors: offering.instructors,
+                enrollment: offering.enrollment,
+                demographics: offering.demographics,
+            })
+            .collect();
+
+        Course {
+            code,
+            title,
+            description,
+            prerequisites,
+            semester_range,
+            restricted,
+            aliases,
+            offerings,
         }
     }
 }
-    
-    
