@@ -9,6 +9,7 @@ mod data_file_help;
 mod normalize;
 mod download;
 mod process;
+mod logic;
 
 use serde_json::Value;
 use regex::{RegexBuilder, Regex};
@@ -40,20 +41,39 @@ use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() {
-    transform();
+//    dump("all.json", "courses.json").unwrap();
+    let courses = from_dump("courses.json").unwrap();
+
+    let (product, map) = logic::Product::from_courses(&courses);
+    println!("{product}");
+//    for course in courses {
+//        if let Some(tree) = &course.prerequisites {
+//            let (product, map) = logic::Product::from_tree(&tree);
+//            println!("{}: {product:?}", course.title);
+//        }
+//    }
 }
 
-pub fn transform() {
-    let input = std::fs::File::open("all.json").unwrap();
-    let results = process::process(serde_json::de::IoRead::new(&input));
-    eprintln!("writing");
+use crate::process::Course;
+use serde_json::StreamDeserializer;
+fn from_dump<I: AsRef<Path>>(input: I) -> io::Result<Vec<Course>> {
+    let input = File::open(input)?;
+    Ok(StreamDeserializer::new(IoRead::new(&input))
+        .into_iter()
+        .collect::<serde_json::Result<_>>()?)
+}
 
-    let mut output = std::fs::File::create("output/courses.json").unwrap();
+use std::fs::File;
+use serde_json::de::IoRead;
+fn dump<I: AsRef<Path>, O: AsRef<Path>>(input: I, output: O) -> io::Result<()> {
+    let input = File::open(input)?;
+    let results = process::process(IoRead::new(&input));
+    let mut output = File::create(output)?;
     for result in results.iter() {
-        serde_json::to_writer_pretty(&mut output, result).unwrap();
-        output.write_all(b"\n").unwrap();
+        serde_json::to_writer(&mut output, result)?;
+        output.write_all(b"\n")?;
     }
-
+    Ok(())
 }
 
 //#[tokio::main]
@@ -95,21 +115,6 @@ pub fn transform() {
 //    let mut output = tokio::fs::File::create("no-canc-indep-study.jsonl").await.unwrap();
 //    download::download(&client, &terms, 10, &mut output).await;
 //    output.shutdown().await.unwrap();
-//}
-
-//pub async fn course_detail<'a, 'b, 'c>(
-//    client: &'c Client, 
-//) -> reqwest::Result<bytes::Bytes> {
-//
-//    client.post("https://cab.brown.edu/api/?page=fose&route=details")
-//        .json(&serde_json::json!({
-//            "srcdb": "201610",
-//            "key": format!("key:1892"),
-//        }))
-//        .send()
-//        .await?
-//        .bytes()
-//        .await
 //}
 
 //fn main() -> io::Result<()> {

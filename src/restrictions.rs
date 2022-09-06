@@ -408,28 +408,18 @@ impl<'de> Deserialize<'de> for PrerequisiteTree {
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let missing_field = "missing `code`, `exam`, `score`, `or`, or `and`";
-                let key = map.next_key()?.ok_or(Error::missing_field(missing_field))?;
+                let key: String = map.next_key()?.ok_or(Error::missing_field(missing_field))?;
 
-                match key {
+                match key.as_str() {
                     "course" => Ok(PrerequisiteTree::Qualification(Qualification::Course(
                         map.next_value::<CourseCode>()?
                         ))),
                     "exam" => Ok(PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { 
                         exam: map.next_value()?,
                         score: {
-                            let (key, value): (&str, _) = map.next_entry()?.ok_or(Error::missing_field("score"))?;
+                            let (key, value): (String, _) = map.next_entry()?.ok_or(Error::missing_field("score"))?;
                             if key != "score" {
                                 return Err(Error::missing_field("thing"));
-                            }
-                            value
-                        }
-                    }))),
-                    "score" => Ok(PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { 
-                        score: map.next_value()?,
-                        exam: {
-                            let (key, value): (&str, _) = map.next_entry()?.ok_or(Error::missing_field("exam"))?;
-                            if key != "exam" {
-                                return Err(Error::missing_field("thing"))
                             }
                             value
                         }
@@ -532,11 +522,22 @@ impl fmt::Display for Exam {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(try_from = "&str")]
+#[serde(try_from = "String")]
 #[serde(into = "String")]
 pub struct CourseCode {
     pub subject: Subject,
     pub number: CourseNumber,
+}
+
+impl TryFrom<String> for CourseCode {
+    type Error = Infallible;
+    fn try_from(string: String) -> Result<Self, Self::Error> {
+//        let mut split = string.split(" ");
+//        let subject = split.next().unwrap().parse().unwrap();
+//        let number = split.next().unwrap().parse().unwrap();
+//        Ok(CourseCode { subject, number })
+        TryFrom::try_from(string.as_str())
+    }
 }
 
 impl<'a> TryFrom<&'a str> for CourseCode {

@@ -7,7 +7,6 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use regex::NoExpand;
 use std::convert::Infallible;
-use serde::Deserializer;
 use serde::Deserialize;
 use serde::Serialize;
 use std::iter;
@@ -49,8 +48,8 @@ fn enrollment_from_html(string: &str) -> Option<u16> {
 
 #[derive(Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Debug)]
 #[serde(transparent)]
-struct CourseCode {
-    inner: String,
+pub struct CourseCode {
+    pub inner: String,
 }
 
 impl FromStr for CourseCode {
@@ -150,8 +149,8 @@ impl FromStr for Semester {
 }
 
 #[derive(Serialize, Deserialize, Copy, Debug, Clone)]
-#[serde(try_from = "&str")]
-#[serde(into = "String")]
+#[serde(try_from = "Vec<u16>")]
+#[serde(into = "Vec<u16>")]
 struct SemesterRange {
     inner: u16,
 }
@@ -190,6 +189,80 @@ impl SemesterRange {
     }
 }
 
+impl TryFrom<Vec<u16>> for SemesterRange {
+    type Error = Infallible;
+    fn try_from(semesters: Vec<u16>) -> Result<Self, Self::Error> {
+        Ok(semesters.into_iter().fold(SemesterRange::EMPTY, |accum, inner| accum.add(Semester { inner })))
+    }
+}
+
+impl From<SemesterRange> for Vec<u16> {
+    fn from(range: SemesterRange) -> Vec<u16> {
+        range.semesters().map(|semester| semester.inner).collect()
+    }
+}
+
+
+//impl TryFrom<String> for SemesterRange {
+//    type Error = Infallible;
+//    fn try_from(string: String) -> Result<Self, Self::Error> {
+//        TryFrom::try_from(string.as_str())
+//    }
+//}
+
+impl<'a> TryFrom<&'a str> for SemesterRange {
+    type Error = Infallible;
+    fn try_from(string: &'a str) -> Result<Self, Self::Error> {
+        static DELIM: Lazy<Regex> = Lazy::new(|| Regex::new(r#", | or "#).unwrap());
+        Ok(DELIM.split(string)
+            .map(Semester::from_str)
+            .map(Result::unwrap)
+            .fold(SemesterRange::EMPTY, SemesterRange::add))
+    }
+}
+
+//impl fmt::Display for SemesterRange {
+//    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//        let mut sep = "";
+//        for semester in self.semesters() {
+//            write!(f, "{sep}{semester}")?;
+//            sep = ", ";
+//        }
+//        Ok(())
+//    }
+//}
+
+//impl From<SemesterRange> for String {
+//    fn from(item: SemesterRange) -> String {
+//        item.to_string()
+//    }
+//}
+
+impl Default for SemesterRange {
+    fn default() -> SemesterRange {
+        SemesterRange::FULL
+    }
+}
+
+use serde::{Serializer, Deserializer};
+use serde::ser::SerializeSeq;
+
+//fn serialize_semester_range<S: Serializer>(range: &SemesterRange, serializer: S) -> Result<S::Ok, S::Error> {
+//    let mut seq = serializer.serialize_seq(None)?;
+//    for number in range.semesters() {
+//        seq.serialize_element(&number.inner)?;
+//    }
+//    seq.end()
+//}
+//
+//fn deserialize_semester_range<'de, D: Deserializer<'de>>(deserializer: D) -> Result<SemesterRange, D::Error> {
+//    let numbers: Vec<u16> = Deserialize::deserialize(deserializer)?;
+////    let numbers: Vec<u16> = deserializer.deserialize()?;
+//    Ok(numbers.into_iter().fold(SemesterRange::EMPTY, |accum, inner| accum.add(Semester { inner })))
+//}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::{Semester, SemesterRange};
@@ -225,46 +298,13 @@ mod tests {
     }
 }
 
-impl<'a> TryFrom<&'a str> for SemesterRange {
-    type Error = Infallible;
-    fn try_from(string: &'a str) -> Result<Self, Self::Error> {
-        static DELIM: Lazy<Regex> = Lazy::new(|| Regex::new(r#", | or "#).unwrap());
-        Ok(DELIM.split(string)
-            .map(Semester::from_str)
-            .map(Result::unwrap)
-            .fold(SemesterRange::EMPTY, SemesterRange::add))
-    }
-}
-
-impl fmt::Display for SemesterRange {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut sep = "";
-        for semester in self.semesters() {
-            write!(f, "{sep}{semester}")?;
-            sep = ", ";
-        }
-        Ok(())
-    }
-}
-
-impl From<SemesterRange> for String {
-    fn from(item: SemesterRange) -> String {
-        item.to_string()
-    }
-}
-
-impl Default for SemesterRange {
-    fn default() -> SemesterRange {
-        SemesterRange::FULL
-    }
-}
-
 fn program_string(string: &str) -> Vec<String> {
     static DELIM: Lazy<Regex> = Lazy::new(|| Regex::new(r#", | or "#).unwrap());
     DELIM.split(string)
         .map(str::to_string)
         .collect()
 }
+
 
 #[derive(Debug)]
 struct Qualifications {
@@ -390,47 +430,12 @@ struct Raw {
     srcdb: String,
 }
 
-pub fn process<'a, R: de::Read<'a>>(
-    source: R,
-) -> Vec<Course> {
-    #[derive(Default)]
-    struct Details {
-        offerings: Vec<Record>,
-        aliases: HashSet<CourseCode>,
-    }
-
-    let mut map: HashMap<CourseCode, Details> = HashMap::new();
-
-    StreamDeserializer::<_, Raw>::new(source)
-        .filter_map(Result::ok)
-        .map(Record::from)
-        .for_each(|record| {
-            match record.title {
-                Title::Title(_) if record.section.is_some() => {
-                    map.entry(record.code.clone()).or_default().offerings.push(record);
-                }, 
-                Title::AliasOf(cannonical) => {
-                    map.entry(cannonical).or_default().aliases.insert(record.code);
-                },
-                _ => {},
-            }
-        });
-
-    map.into_iter()
-        .filter(|(_, Details { offerings, .. })| !offerings.is_empty())
-        .map(|(code, Details { offerings, aliases })| {
-            let aliases = aliases.into_iter().collect();
-            Course::from_offerings(code, offerings, aliases)
-        })
-        .collect()
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct Course {
-    code: CourseCode,
-    title: String,
+    pub code: CourseCode,
+    pub title: String,
     description: String,
-    prerequisites: Option<PrerequisiteTree>,
+    pub prerequisites: Option<PrerequisiteTree>,
     semester_range: SemesterRange,
     restricted: bool,
     aliases: Vec<CourseCode>,
@@ -483,4 +488,79 @@ impl Course {
             offerings,
         }
     }
+}
+
+pub fn process<'a, R: de::Read<'a>>(
+    source: R,
+) -> Vec<Course> {
+    #[derive(Default)]
+    struct Details {
+        offerings: Vec<Record>,
+        aliases: HashSet<CourseCode>,
+    }
+
+    let mut map: HashMap<CourseCode, Details> = HashMap::new();
+
+    StreamDeserializer::<_, Raw>::new(source)
+        .filter_map(Result::ok)
+        .map(Record::from)
+        .for_each(|record| {
+            match record.title {
+                Title::Title(_) if record.section.is_some() => {
+                    map.entry(record.code.clone()).or_default().offerings.push(record);
+                }, 
+                Title::AliasOf(cannonical) => {
+                    map.entry(cannonical).or_default().aliases.insert(record.code);
+                },
+                _ => {},
+            }
+        });
+
+    map.into_iter()
+        .filter(|(_, Details { offerings, .. })| !offerings.is_empty())
+        .map(|(code, Details { offerings, aliases })| {
+            let aliases = aliases.into_iter().collect();
+            Course::from_offerings(code, offerings, aliases)
+        })
+        .collect()
+}
+
+fn as_wolfram(tree: &PrerequisiteTree) -> String {
+    match tree {
+        PrerequisiteTree::Qualification(Qualification::Course(course)) => format!("\"{course}\""),
+        PrerequisiteTree::Qualification(Qualification::ExamScore(exam)) => format!("\"{exam}\""),
+        PrerequisiteTree::Conjunctive(conj, items) => {
+            let mut ret = String::from("(");
+            let mut sep = "";
+            for item in items {
+                ret.push_str(sep);
+                ret.push_str(&as_wolfram(item));
+
+                sep = match conj {
+                    Conjunctive::All => "&&",
+                    Conjunctive::Any => "||",
+                };
+            }
+            ret += ")";
+            ret
+        }
+    }
+}
+
+use crate::restrictions::{Qualification, Conjunctive};
+
+pub fn prerequisite_simplify(courses: &[Course]) -> String {
+    let mut ret = String::new();
+
+    let mut sep = "";
+    for course in courses {
+        if let Some(tree) = &course.prerequisites {
+            ret.push_str(sep);
+            ret.push_str(&format!("Implies[\"{}\", {}]", course.code.inner, as_wolfram(tree)));
+            sep = "&&";
+        }
+        
+    }
+    ret
+
 }
