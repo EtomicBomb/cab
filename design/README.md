@@ -64,9 +64,7 @@ Brown courses that might interest them.
 
 # Failure model
 
-Since this can be re-run, unexpected data should lead to panics.
-Development mistakes are panics.
-
+TODO
 
 # Processing
 
@@ -143,6 +141,16 @@ courses.all(|(code, prereqs)| code ⇒ prereqs)
 
 Find an equivalent expression in conjuctive normal form. Replace all (¬c ∨ p) with (c ⇒ p).
 Each of these terms represent an arrow in the prerequisite graph.
+
+#### Rules:
+
+before | after | name
+---|---|---
+a->(B B C) | a->(B C) | idempotency
+a->(a B) |  | negation
+a->(b) b->(C) a->(C D) | a->(b) b->(C) | transitivity
+a->(B) c->(a B D) | a->(B) c->(B D) | absorption 
+a->(B) a->(B C) | a->(B) | simplify
 
 ## Stage 3: Visualization
 

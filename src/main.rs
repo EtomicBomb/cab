@@ -44,14 +44,13 @@ async fn main() {
 //    dump("all.json", "courses.json").unwrap();
     let courses = from_dump("courses.json").unwrap();
 
-    let (product, map) = logic::Product::from_courses(&courses);
-    println!("{product}");
-//    for course in courses {
-//        if let Some(tree) = &course.prerequisites {
-//            let (product, map) = logic::Product::from_tree(&tree);
-//            println!("{}: {product:?}", course.title);
-//        }
-//    }
+    let (mut product, map) = logic::Product::from_courses(courses.iter());
+//    std::fs::write("before.txt", product.to_string()).unwrap();
+    println!("{}", product.size());
+    product.minimize();
+//    std::fs::write("after.txt", product.to_string()).unwrap();
+    println!("{}", product.size());
+//    println!("{product}{}", product.size());
 }
 
 use crate::process::Course;

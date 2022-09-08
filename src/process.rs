@@ -221,16 +221,16 @@ impl<'a> TryFrom<&'a str> for SemesterRange {
     }
 }
 
-//impl fmt::Display for SemesterRange {
-//    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//        let mut sep = "";
-//        for semester in self.semesters() {
-//            write!(f, "{sep}{semester}")?;
-//            sep = ", ";
-//        }
-//        Ok(())
-//    }
-//}
+impl fmt::Display for SemesterRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut sep = "";
+        for semester in self.semesters() {
+            write!(f, "{sep}{semester}")?;
+            sep = ", ";
+        }
+        Ok(())
+    }
+}
 
 //impl From<SemesterRange> for String {
 //    fn from(item: SemesterRange) -> String {
