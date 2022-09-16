@@ -44,12 +44,12 @@ async fn main() {
 //    dump("all.json", "courses.json").unwrap();
     let courses = from_dump("courses.json").unwrap();
 
-    let (mut product, map) = logic::Product::from_courses(courses.iter());
-//    std::fs::write("before.txt", product.to_string()).unwrap();
-    println!("{}", product.size());
-    product.minimize();
-//    std::fs::write("after.txt", product.to_string()).unwrap();
-    println!("{}", product.size());
+    let minimized = courses.iter()
+        .filter_map(|course| Some((Qualification::Course(CourseCode::try_from(course.code.inner.as_str()).unwrap()), course.prerequisites.as_ref()?)));
+    let minimized: HashMap<_, _> = logic::minimize(minimized).collect();
+    println!("{:?}", minimized);
+//    std::fs::write("before.txt", graph.to_string()).unwrap();
+//    std::fs::write("after.txt", graph.to_string()).unwrap();
 //    println!("{product}{}", product.size());
 }
 

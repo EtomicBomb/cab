@@ -1,6 +1,6 @@
 use serde::de::Error;
 use serde::Deserializer;
-use serde::de::Visitor;
+use serde::de;
 use serde::de::MapAccess;
 use serde::ser::{Serializer, SerializeSeq, SerializeMap};
 use serde::Serialize;
@@ -352,6 +352,32 @@ impl PrerequisiteTree {
     }
 }
 
+use crate::logic::IntoProduct;
+use crate::logic::Visitor;
+use crate::logic::Product;
+impl IntoProduct for PrerequisiteTree {
+    type Node = Qualification;
+    fn into_product(&self, visitor: &mut Visitor<Self::Node>) -> Product {
+        match self {
+            PrerequisiteTree::Qualification(qualification) => visitor.visit_node(qualification.clone()),
+            PrerequisiteTree::Conjunctive(Conjunctive::All, children) => visitor.visit_all(children),
+            PrerequisiteTree::Conjunctive(Conjunctive::Any, children) => visitor.visit_any(children),
+        }
+    }
+
+    fn node(node: &Self::Node) -> Self {
+        PrerequisiteTree::Qualification(node.clone())
+    }
+
+    fn all<I: Iterator<Item=Self>>(iter: I) -> Self {
+        PrerequisiteTree::Conjunctive(Conjunctive::All, iter.collect())
+    }
+
+    fn any<I: Iterator<Item=Self>>(iter: I) -> Self {
+        PrerequisiteTree::Conjunctive(Conjunctive::Any, iter.collect())
+    }
+}
+
 impl fmt::Display for PrerequisiteTree {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -399,7 +425,7 @@ impl<'de> Deserialize<'de> for PrerequisiteTree {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct PrerequisiteTreeVisitor;
 
-        impl<'de> Visitor<'de> for PrerequisiteTreeVisitor {
+        impl<'de> de::Visitor<'de> for PrerequisiteTreeVisitor {
             type Value = PrerequisiteTree;
 
             fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
