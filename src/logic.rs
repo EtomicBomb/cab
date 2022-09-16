@@ -111,11 +111,11 @@ pub struct Product(Vec<Sum>);
 
 impl Product {
     fn and_identity() -> Product {
-        Product(vec![])
+        Product::from([])
     }
 
     fn or_identity() -> Product {
-        Product(vec![Sum::from([])])
+        Product::from([Sum::from([])])
     }
 
     fn is_empty(&self) -> bool {
@@ -125,26 +125,6 @@ impl Product {
     fn iter(&self) -> impl Iterator<Item=&'_ Sum> {
         self.0.iter()
     }
-
-    fn from_prereq_tree<'a>(
-        tree: &'a PrerequisiteTree, 
-        map: &mut SymbolMap,
-    ) -> Self {
-        match tree {
-            PrerequisiteTree::Qualification(qualification) => {
-                let symbol = map.symbol(qualification.clone());
-                Product(vec![Sum::from([symbol])])
-            },
-            PrerequisiteTree::Conjunctive(conjunctive, children) => {
-                let children = children.iter().map(|t| Product::from_prereq_tree(t, map));
-                match conjunctive {
-                    Conjunctive::All => children.fold(Product::and_identity(), BitAnd::bitand),
-                    Conjunctive::Any => children.fold(Product::or_identity(), |accum, elem| &accum | &elem),
-                }
-            },
-        }
-    }
-    
 }
 
 impl<const N: usize> From<[Sum; N]> for Product {
@@ -181,22 +161,6 @@ impl<'a> BitOr for &'a Product {
             })
             .flatten()
             .collect())
-    }
-}
-
-#[derive(Default)]
-struct SymbolMap {
-    map: HashMap<Qualification, Symbol>,
-    next: u32,
-}
-
-impl SymbolMap {
-    fn symbol(&mut self, qualification: Qualification) -> Symbol {
-        *self.map.entry(qualification)
-            .or_insert_with(|| {
-                self.next += 1;
-                Symbol(self.next)
-            })
     }
 }
 
@@ -249,12 +213,6 @@ impl Products {
         while let Some((a, b)) = find_thingy(self) {
             self.products.get_mut(&a).unwrap().0.remove(b);
         }
-
-//        for (&lhs, product) in self.products.iter_mut() {
-//            let implications = Implications::from(self.clone());
-//            product.0.retain(|sum| !implications.implies(&Sum::from([lhs]), sum));
-//        }
-//        self.products.retain(|_, product| !product.0.is_empty());
     }
 
     fn implies(&self, lhs: &Sum, rhs: &Sum, disallow: Option<(Symbol, usize)>) -> bool {
@@ -312,8 +270,7 @@ impl Products {
                         let child_valid = disallow != Some((sym, i))
                             && !seen.contains(&child)
                             && !child.iter().any(|s| 
-                                !rhs.contains(s) 
-                                && self.get(s).map(Product::is_empty).unwrap_or(false));
+                                !rhs.contains(s) && self.get(s).map(Product::is_empty).unwrap_or(true));
                         if child_valid {
                             seen.insert(child.clone());
                             heap.push(Lhs::new(child, rhs));
@@ -348,7 +305,7 @@ pub struct Visitor<N> {
     next: u32,
 }
 
-impl<N: 'static + Hash + Eq> Visitor<N> {
+impl<N: Hash + Eq> Visitor<N> {
     fn symbol(&mut self, node: N) -> Symbol {
         *self.map.entry(node).or_insert_with(|| {
             self.next += 1;
@@ -356,24 +313,24 @@ impl<N: 'static + Hash + Eq> Visitor<N> {
         })
     }
 
-    pub fn visit_node<'a>(&mut self, node: N) -> Product {
+    pub fn visit_node(&mut self, node: N) -> Product {
         Product::from([Sum::from([self.symbol(node)])])
     }
 
-    pub fn visit_all<'a, S, I>(&mut self, iter: I) -> Product 
+    pub fn visit_all<'b, S, I>(&mut self, iter: I) -> Product 
     where 
-        S: IntoProduct<Node=N> + 'a,
-        I: IntoIterator<Item=&'a S>,
+        S: IntoProduct<Node=N> + 'b,
+        I: IntoIterator<Item=&'b S>,
     {
         iter.into_iter()
             .map(|tree| tree.into_product(self))
             .fold(Product::and_identity(), BitAnd::bitand)
     }
 
-    pub fn visit_any<'a, S, I>(&mut self, iter: I) -> Product
+    pub fn visit_any<'b, S, I>(&mut self, iter: I) -> Product
     where 
-        S: IntoProduct<Node=N> + 'a,
-        I: IntoIterator<Item=&'a S>,
+        S: IntoProduct<Node=N> + 'b,
+        I: IntoIterator<Item=&'b S>,
     {
         iter.into_iter()
             .map(|tree| tree.into_product(self))
@@ -389,12 +346,12 @@ pub trait IntoProduct {
     fn any<I: Iterator<Item=Self>>(iter: I) -> Self;
 }
 
-
-pub fn minimize<'a, S, M, N>(trees: M) -> impl Iterator<Item=(N, S)>
+pub fn minimize<'a, 'b, S, M, N>(trees: M) -> impl Iterator<Item=(N, S)>
 where
-    N: Eq + Hash + Clone + 'static, 
+    'b: 'a,
+    N: Eq + Hash + Clone, 
     M: IntoIterator<Item=(N, &'a S)>,
-    S: IntoProduct<Node=N> + 'a,
+    S: IntoProduct<Node=N> + 'b,
 {
     let mut visitor = Visitor { map: HashMap::new(), next: 0 };
     let products = trees.into_iter()
