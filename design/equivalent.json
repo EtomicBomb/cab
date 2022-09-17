@@ -1,0 +1,227 @@
+{
+    "cannonical": {"group": "Into Economics"},
+    "members": [
+        {"exam": "AP Microeconomics", "score": 4},
+        {"course": "ECON 0110"},
+        {"exam": "AP Macroeconomics", "score": 4},
+        {"course": "ECON 1110"},
+        {"exam": "IB HL Economics", "score": 6},
+        {"course": "ECON 1130"},
+    ],
+    "implies": [],
+},
+
+{
+    "cannonical": {"group": "Intro Biology"},
+    "members": [
+        {"course": "BIOL 0200"},
+        {"exam": "BIOL Placement Test Min.Score", "score": 30},
+    ],
+    "implies": [],
+},
+
+{
+    "cannonical": {"group": "Intro Art"},
+    "members": [
+        {"course": "VISA 0100"},
+        {"course": "VISA 0140"},
+        {"course": "VISA 0120"},
+        {"course": "VISA 0160"},
+        {"course": "VISA 0150"},
+        {"course": "VISA 0110"},
+        {"course": "VISA 0130"},
+    ],
+    "implies": [],
+},
+
+{
+    "cannonical": {"group": "Intro Applied Math"},
+    "members": [
+        {"course": {"course": "APMA 0340"},
+        {"course": {"course": "APMA 0360"},
+    ],
+    "implies": [],
+},
+
+{
+    "cannonical": {"group": "Single Variable Calculus I"},
+    "members": [
+        {"course": "MATH 0060"},
+        {"course": "MATH 0070"},
+        {"course": "MATH 0090"},
+        {"course": "ECON 0170"},
+        {"exam": "AP Calculus AB", "score": 4},
+        {"exam": "AP Calculus BC", "score": 3},
+        {"exam": "IB HL Math Analysis & Approach", "score": 5},
+        {"exam": "IB SL Mathematics", "score": 6} 
+
+    ],
+    "implies": [{"course": "MATH 0050"}],
+},
+
+{
+    "cannonical": {"group": "Single Variable Calculus II"},
+    "members": [
+        {"course": "MATH 0100"},
+        {"course": "MATH 0170"},
+        {"course": "MATH 0190"},
+        {"exam": "AP Calculus BC", "score": 4},
+        {"exam": "IB SL Math Analysis & Approach", "score": 6},
+        {"exam": "IB HL Math Appl. & Interpreta.", "score": 6},
+    ],
+    "implies": [{"group": "Single Variable Calculus I"}],
+},
+
+{
+    "cannonical": {"group": "Multivariable Calculus"},
+    "members": [
+        {"course": "MATH 0180"},
+        {"course": "MATH 0200"},
+        {"course": "MATH 0350"},
+    ],
+    "implies": [{"group": "Single Variable Calculus II"}],
+},
+
+{
+    "cannonical": {"group": "Intro Statistics"},
+    "members": [
+        {"course": "APMA 1650"},
+        {"course": "APMA 1655"},
+        {"course": "CSCI 1450"},
+        {"course": "CSCI 0450"},
+        {"course": "MATH 1610"},
+        {"course": "MATH 1620"},
+        {"course": "ECON 1620"},
+    ],
+    "implies": [],
+},
+
+{
+    "cannonical": {"group": "Linear Algebra"},
+    "members": [
+        {"course": "MATH 0520"},
+        {"course": "MATH 0540"},
+        {"course": "CSCI 0530"},
+        {"course": "CSCI 0535"},
+    ],
+    "implies": [],
+},
+
+{
+    "cannonical": {"group": "Programming I"},
+    "members": [
+        {"course": "CSCI 0111"},
+        {"course": "CSCI 0112"},
+        {"course": "CSCI 0150"},
+        {"course": "CSCI 0170"},
+        {"course": "CLPS 0950"},
+        {"course": "CLPS 1292"},
+        {"course": "APMA 0160"},
+        {"course": "APMA 0200"},
+        {"course": "APMA 1170"},
+        {"course": "APMA 1180"},
+        {"course": "APMA 1210"},
+        {"course": "APMA 1690"},
+        {"course": "APMA 1740"},
+        {"course": "APMA 1720"},
+        {"course": "APMA 1860"},
+    ],
+    "implies": [{"course": "CSCI 0111"}],
+},
+
+{
+    "cannonical": {"group": "Programming II"},
+    "members": [
+        {"course": "CSCI 0160"},
+        {"course": "CSCI 0180"},
+        {"course": "CSCI 0190"},
+        {"course": "CSCI 0200"},
+    ],
+    "implies": [{"group": "Programming I"}],
+},
+
+{
+    "cannonical": {"group": "Basic Spanish I"},
+    "members": [
+        {"course": "HISP 0100"},
+        {"exam": "SATSubj-Spanish", "score": 300},
+    ],
+    "implies": [],
+}
+
+{
+    "cannonical": {"group": "Basic Spanish II"},
+    "members": [
+        {"course": "HISP 0200"},
+        {"exam": "SATSubj-Spanish", "score": 400},
+        {"exam": "Spanish Placement", "score": 241},
+    ],
+    "implies": [{"group": "Basic Spanish I"}],
+}
+
+{
+    "cannonical": {"group": "Intermediate Spanish I"},
+    "members": [
+        {"course": "HISP 0300"},
+        {"exam": "SATSubj-Spanish", "score": 460},
+        {"exam": "Spanish Placement", "score": 341},
+    ],
+    "implies": [{"group": "Basic Spanish II"}],
+}
+
+{
+    "cannonical": {"group": "Intermediate Spanish II"},
+    "members": [
+        {"course": "HISP 0400"},
+        {"exam": "SATSubj-Spanish", "score": 520},
+        {"exam": "Spanish Placement", "score": 411},
+    ],
+    "implies": [{"group": "Intermediate Spanish I"}],
+}
+
+{
+    "cannonical": {"group": "Advanced Spanish I"},
+    "members": [
+        {"course": "HISP 0500"},
+        {"exam": "SATSubj-Spanish", "score": 600},
+        {"exam": "AP Spanish Literature", "score": 4},
+        {"exam": "AP Spanish Language", "score": 4},
+        {"exam": "Spanish Placement", "score": 491},
+    ],
+    "implies": [{"group": "Intermediate Spanish II"}],
+}
+
+{
+    "cannonical": {"group": "Advanced Spanish II"},
+    "members": [
+        {"course": "HISP 0600"},
+        {"exam": "SATSubj-Spanish", "score": 670},
+        {"exam": "AP Spanish Literature", "score": 5},
+        {"exam": "AP Spanish Language", "score": 5},
+        {"exam": "Spanish Placement", "score": 571},
+    ],
+    "implies": [{"group": "Advanced Spanish I"}],
+}
+
+{
+    "cannonical": {"group": "More Advanced Spanish"},
+    "members": [
+        {"course": "HISP 0700"},
+        {"exam": "SATSubj-Spanish", "score": 750},
+        {"exam": "AP Spanish Literature", "score": 5},
+        {"exam": "AP Spanish Language", "score": 5},
+        {"exam": "Spanish Placement", "score": 651},
+    ],
+    "implies": [{"group": "Advanced Spanish II"}],
+}
+
+{
+    "cannonical": {"group": "Extra Advanced Spanish"},
+    "members": [
+        {"course": "HISP 1000"},
+        {"exam": "AP Spanish Literature", "score": 5},
+        {"exam": "AP Spanish Language", "score": 5},
+    ],
+    "implies": [{"course": "HISP 0650"}],
+}
+

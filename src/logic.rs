@@ -1,3 +1,4 @@
+use std::iter::once;
 use std::hash::Hash;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
@@ -32,8 +33,10 @@ struct Sum {
     inner: BTreeSet<Symbol>,
 }
 
+use std::iter::ExactSizeIterator;
+
 impl Sum {
-    fn iter(&self) -> impl Iterator<Item=Symbol> + '_ {
+    fn iter(&self) -> impl ExactSizeIterator + Iterator<Item=Symbol> + '_ {
         self.inner.iter().cloned()
     }
 
@@ -218,44 +221,10 @@ impl Products {
     fn implies(&self, lhs: &Sum, rhs: &Sum, disallow: Option<(Symbol, usize)>) -> bool {
         // we return true iff we can find an equivalent lhs that's a subset of rhs
         // because a ⇒ a ∨ b
-        struct Lhs {
-            rhs_difference: Reverse<usize>,
-            lhs: Sum,
-        }
-
-        impl Lhs {
-            fn new(lhs: Sum, rhs: &Sum) -> Self {
-                Lhs { 
-                    rhs_difference: Reverse(lhs.difference_size(rhs)),
-                    lhs,
-                }
-            }
-        }
-
-        impl PartialEq for Lhs {
-            fn eq(&self, other: &Self) -> bool {
-                self.rhs_difference.eq(&other.rhs_difference)
-            }
-        }
-
-        impl Eq for Lhs { } 
-
-        impl Ord for Lhs {
-            fn cmp(&self, other: &Self) -> Ordering {
-                self.rhs_difference.cmp(&other.rhs_difference)
-            }
-        }
-
-        impl PartialOrd for Lhs {
-            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                self.rhs_difference.partial_cmp(&other.rhs_difference)
-            }
-        }
-
         let mut seen = HashSet::from([lhs.clone()]);
-        let mut heap = BinaryHeap::from([Lhs::new(lhs.clone(), rhs)]);
+        let mut heap = Vec::from([lhs.clone()]);
 
-        while let Some(Lhs { lhs, .. }) = heap.pop() {
+        while let Some(lhs) = heap.pop() {
             if lhs.is_subset(rhs) {
                 eprintln!("({}) ({})", lhs, rhs);
                 return true;
@@ -273,7 +242,7 @@ impl Products {
                                 !rhs.contains(s) && self.get(s).map(Product::is_empty).unwrap_or(true));
                         if child_valid {
                             seen.insert(child.clone());
-                            heap.push(Lhs::new(child, rhs));
+                            heap.push(child);
                         }
                     }
                 }
@@ -338,15 +307,41 @@ impl<N: Hash + Eq> Visitor<N> {
     }
 }
 
-pub trait IntoProduct {
+pub trait IntoProduct: Sized {
     type Node: Hash + Eq;
     fn into_product(&self, visitor: &mut Visitor<Self::Node>) -> Product;
     fn node(node: &Self::Node) -> Self;
-    fn all<I: Iterator<Item=Self>>(iter: I) -> Self;
-    fn any<I: Iterator<Item=Self>>(iter: I) -> Self;
+    fn all(trees: Vec<Self>) -> Self;
+    fn any(trees: Vec<Self>) -> Self;
 }
 
-pub fn minimize<'a, 'b, S, M, N>(trees: M) -> impl Iterator<Item=(N, S)>
+fn sum_into_tree<N, S>(sum: &Sum, map: &HashMap<Symbol, N>) -> Option<S>
+where
+    N: Eq + Hash,
+    S: IntoProduct<Node=N>,
+{
+    let mut symbols: Vec<_> = sum.iter().map(|symbol| S::node(&map[&symbol])).collect();
+    match symbols.len() {
+        0 => None,
+        1 => Some(symbols.pop().unwrap()),
+        _ => Some(S::any(symbols)),
+    }
+}
+
+fn product_into_tree<N, S>(product: &Product, map: &HashMap<Symbol, N>) -> Option<S>
+where
+    N: Eq + Hash,
+    S: IntoProduct<Node=N>,
+{
+    let mut sums = product.iter().map(|sum| sum_into_tree(sum, map)).collect::<Option<Vec<_>>>()?;
+    match sums.len() {
+        0 => Some(S::all(Vec::default())),
+        1 => Some(sums.pop().unwrap()),
+        _ => Some(S::all(sums)),
+    }
+}
+
+pub fn minimize<'a, 'b, S, M, N>(trees: M) -> impl Iterator<Item=(N, Option<S>)>
 where
     'b: 'a,
     N: Eq + Hash + Clone, 
@@ -363,10 +358,11 @@ where
     products.products.into_iter()
         .map(move |(symbol, product)| {
             let node = map[&symbol].clone();
-            let tree = S::all(product.iter().map(|sum| S::any(sum.iter().map(|symbol| S::node(&map[&symbol])))));
+            let tree = product_into_tree(&product, &map);
             (node, tree)
         })
 }
+
 
 #[cfg(test)]
 mod implications {

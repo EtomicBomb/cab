@@ -39,15 +39,32 @@ use std::fmt::Write as FmtWrite;
 use reqwest::Client;
 use tokio::io::AsyncWriteExt;
 
+//use ;
+fn qualification(code: &crate::process::CourseCode) -> Qualification {
+    Qualification::Course(CourseCode::try_from(code.inner.as_str()).unwrap())
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> io::Result<()> {
 //    dump("all.json", "courses.json").unwrap();
-    let courses = from_dump("courses.json").unwrap();
+    let mut courses = from_dump("courses.json").unwrap();
 
     let minimized = courses.iter()
-        .filter_map(|course| Some((Qualification::Course(CourseCode::try_from(course.code.inner.as_str()).unwrap()), course.prerequisites.as_ref()?)));
-    let minimized: HashMap<_, _> = logic::minimize(minimized).collect();
-    println!("{:?}", minimized);
+        .filter_map(|course| Some((qualification(&course.code), course.prerequisites.as_ref()?)));
+    let mut minimized: HashMap<_, _> = logic::minimize(minimized).collect();
+
+    for course in courses.iter_mut() {
+        if let Some(new_tree) = minimized.remove(&qualification(&course.code)) {
+            course.prerequisites = new_tree;
+        }
+    }
+
+    let mut output = std::fs::File::create("minimized.json").unwrap();
+    for result in courses.iter() {
+        serde_json::to_writer(&mut output, result)?;
+        output.write_all(b"\n")?;
+    }
+    Ok(())
 //    std::fs::write("before.txt", graph.to_string()).unwrap();
 //    std::fs::write("after.txt", graph.to_string()).unwrap();
 //    println!("{product}{}", product.size());

@@ -369,12 +369,12 @@ impl IntoProduct for PrerequisiteTree {
         PrerequisiteTree::Qualification(node.clone())
     }
 
-    fn all<I: Iterator<Item=Self>>(iter: I) -> Self {
-        PrerequisiteTree::Conjunctive(Conjunctive::All, iter.collect())
+    fn all(trees: Vec<Self>) -> Self {
+        PrerequisiteTree::Conjunctive(Conjunctive::All, trees)
     }
 
-    fn any<I: Iterator<Item=Self>>(iter: I) -> Self {
-        PrerequisiteTree::Conjunctive(Conjunctive::Any, iter.collect())
+    fn any(trees: Vec<Self>) -> Self {
+        PrerequisiteTree::Conjunctive(Conjunctive::Any, trees)
     }
 }
 
