@@ -210,6 +210,7 @@ impl Products {
         }
     }
 
+    #[cfg(test)]
     fn implies_test(&self, lhs: &Sum, rhs: &Sum) -> bool {
         self.implies(lhs, rhs, None)
     }
