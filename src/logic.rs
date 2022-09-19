@@ -28,7 +28,7 @@ impl fmt::Display for Symbol {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Debug)]
 struct Sum {
     inner: BTreeSet<Symbol>,
 }
@@ -38,6 +38,12 @@ use std::iter::ExactSizeIterator;
 impl Sum {
     fn iter(&self) -> impl ExactSizeIterator + Iterator<Item=Symbol> + '_ {
         self.inner.iter().cloned()
+    }
+ 
+    fn without(&self, symbol: Symbol) -> Sum {
+        let mut inner = self.inner.clone();
+        inner.remove(&symbol);
+        Sum { inner }
     }
 
     fn contains(&self, symbol: Symbol) -> bool {
@@ -59,24 +65,6 @@ impl Sum {
     fn remove(&mut self, symbol: Symbol) {
         self.inner.remove(&symbol);
     }
-
-//    /// Whenever a implies b:
-//    /// z=>(a || b || ...) == z=>(a || ...)
-//    /// Or is it:
-//    /// Whevever a => B
-//    /// z=>(a || B || ...) == z=>(B || ...)
-//    /// Or is it:
-//    /// Whevever a => B
-//    /// z=>(a || B) == z=>(B)
-//    fn minimize(&mut self, implications: &Implications) {
-//        fn find_redundant(sum: &Sum, implications: &Implications) -> Option<Symbol> {
-//            sum.iter().find(|&b| sum.iter().any(|a| a != b && implications.implies(&Sum::from([a]), &Sum::from([b]))))
-//        }
-//
-//        while let Some(b) = find_redundant(self, implications) {
-//            self.inner.remove(&b);
-//        }
-//    }
 }
 
 impl Extend<Symbol> for Sum {
@@ -181,6 +169,14 @@ impl Products {
         self.products.iter().map(|(&k, v)| (k, v))
     }
 
+    fn len(&self) -> usize {
+        self.iter()
+            .map(|(_, product)| {
+                product.iter().map(|sum| sum.iter().count()).sum::<usize>()
+            })
+            .sum()
+    }
+
     /// Whenever a implies B:
     /// a=>(B || ...) == eliminate
     /// Example 1:
@@ -194,27 +190,44 @@ impl Products {
     /// c => e
     /// a => d || e || f     can still eliminate this last sum
     fn minimize(&mut self) {
-//        for (&lhs, product) in self.products.iter_mut() {
-//            for sum in product.0.iter_mut() {
-//                let implications = Implications::from(self.clone());
-//                while let Some(b) = find_redundant(sum, &implications) {
-//                    sum.inner.remove(&b);
-//                }
-//            }
-//        }
+        // a -> (b || C); b->C === a->C
+        fn find_redundant(products: &Products) -> Option<(Symbol, usize, Symbol)> {
+            products.iter()
+                .find_map(|(lhs, product)| {
+                    product.iter()
+                        .enumerate()
+                        .find_map(|(sum_index, ref sum)| {
+                            sum.iter()
+                                .find(|&s| {
+                                    let sum = sum.without(s);
+                                    products.implies(&Sum::from([s]), &sum, None)
+                                })
+                                .map(|s| (lhs, sum_index, s))
+                        })
+                })
+        }
 
         fn find_thingy(products: &Products) -> Option<(Symbol, usize)> {
             products.iter()
                 .find_map(|(lhs, product)| {
                     product.iter()
                         .enumerate()
-                        .find(|&(b, ref sum)| products.implies(&Sum::from([lhs]), sum, Some((lhs, b)))) 
+                        .find(|&(b, ref sum)| products.implies(&Sum::from([lhs]), sum, Some((lhs, b))))
                         .map(|(b, _)| (lhs, b))
                 })
+        }
+    
+        while let Some((lhs, sum_index, redundant)) = find_redundant(self) {
+            self.products.get_mut(&lhs).unwrap().0[sum_index].remove(redundant);
         }
 
         while let Some((a, b)) = find_thingy(self) {
             self.products.get_mut(&a).unwrap().0.remove(b);
+        }
+
+        for product in self.products.values_mut() {
+            product.0.sort();
+            product.0.dedup();
         }
     }
 
@@ -226,7 +239,8 @@ impl Products {
 
         while let Some(lhs) = heap.pop() {
             if lhs.is_subset(rhs) {
-                eprintln!("({}) ({})", lhs, rhs);
+//                assert!(lhs.iter().all(|l| self.implies(&Sum::from([l]), rhs, None)));
+//                eprintln!("({}) ({})", lhs, rhs);
                 return true;
             }
 
@@ -238,7 +252,7 @@ impl Products {
                         child.extend(sum.iter());
                         let child_valid = disallow != Some((sym, i))
                             && !seen.contains(&child)
-                            && !child.iter().any(|s| 
+                            && !child.iter().any(|s|
                                 !rhs.contains(s) && self.get(s).map(Product::is_empty).unwrap_or(true));
                         if child_valid {
                             seen.insert(child.clone());
@@ -247,7 +261,7 @@ impl Products {
                     }
                 }
             }
-            
+
         }
 
         false
@@ -286,8 +300,8 @@ impl<N: Hash + Eq> Visitor<N> {
         Product::from([Sum::from([self.symbol(node)])])
     }
 
-    pub fn visit_all<'b, S, I>(&mut self, iter: I) -> Product 
-    where 
+    pub fn visit_all<'b, S, I>(&mut self, iter: I) -> Product
+    where
         S: IntoProduct<Node=N> + 'b,
         I: IntoIterator<Item=&'b S>,
     {
@@ -297,7 +311,7 @@ impl<N: Hash + Eq> Visitor<N> {
     }
 
     pub fn visit_any<'b, S, I>(&mut self, iter: I) -> Product
-    where 
+    where
         S: IntoProduct<Node=N> + 'b,
         I: IntoIterator<Item=&'b S>,
     {
@@ -344,16 +358,18 @@ where
 pub fn minimize<'a, 'b, S, M, N>(trees: M) -> impl Iterator<Item=(N, Option<S>)>
 where
     'b: 'a,
-    N: Eq + Hash + Clone, 
+    N: Eq + Hash + Clone,
     M: IntoIterator<Item=(N, &'a S)>,
     S: IntoProduct<Node=N> + 'b,
 {
-    let mut visitor = Visitor { map: HashMap::new(), next: 0 };
+    let mut visitor = Visitor { map: HashMap::default(), next: 0 };
     let products = trees.into_iter()
         .map(|(node, tree)| (visitor.symbol(node), tree.into_product(&mut visitor)))
         .collect();
     let mut products = Products { products };
+    println!("before: {}", products.len());
     products.minimize();
+    println!("after: {}", products.len());
     let map: HashMap<Symbol, N> = visitor.map.into_iter().map(|(k, v)| (v, k)).collect();
     products.products.into_iter()
         .map(move |(symbol, product)| {
@@ -366,7 +382,6 @@ where
 
 #[cfg(test)]
 mod implications {
-    use super::Implications;
     use super::Symbol;
     use super::Sum;
     use super::Product;
@@ -384,16 +399,16 @@ mod implications {
     fn bar() {
         let implications = Products::from([
             (Symbol(0), Product::from([Sum::from([Symbol(1)])])),
-            (Symbol(1), Product::from([Sum::from([Symbol(2)])])), 
-            (Symbol(2), Product::from([Sum::from([Symbol(3)])])),  
-            (Symbol(3), Product::from([Sum::from([Symbol(4)])])),  
-            (Symbol(4), Product::from([Sum::from([Symbol(5)])])),  
+            (Symbol(1), Product::from([Sum::from([Symbol(2)])])),
+            (Symbol(2), Product::from([Sum::from([Symbol(3)])])),
+            (Symbol(3), Product::from([Sum::from([Symbol(4)])])),
+            (Symbol(4), Product::from([Sum::from([Symbol(5)])])),
         ]);
         assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(0)])));
         assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
         assert!(implications.implies(&Sum::from([Symbol(1)]), &Sum::from([Symbol(2)])));
         assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(5)])));
-        
+
         assert!(!implications.implies(&Sum::from([Symbol(1)]), &Sum::from([Symbol(0)])));
         assert!(!implications.implies(&Sum::from([Symbol(5)]), &Sum::from([Symbol(0)])));
     }
@@ -408,10 +423,10 @@ mod implications {
         assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
         assert!(implications.implies(&Sum::from([Symbol(1)]), &Sum::from([Symbol(3)])));
         assert!(implications.implies(&Sum::from([Symbol(2)]), &Sum::from([Symbol(3)])));
-        
+
         assert!(!implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
         assert!(!implications.implies(&Sum::from([Symbol(3)]), &Sum::from([Symbol(0)])));
-    }    
+    }
 
     #[test]
     fn qux() {
@@ -423,9 +438,9 @@ mod implications {
             (Symbol(4), Product::from([Sum::from([Symbol(5)])])),
         ]);
         assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(5)])));
-        
+
         assert!(!implications.implies(&Sum::from([Symbol(2)]), &Sum::from([Symbol(3)])));
-    }    
+    }
 
     #[test]
     fn quoo() {
@@ -435,7 +450,7 @@ mod implications {
             (Symbol(2), Product::from([Sum::from([Symbol(0)])])),
         ]);
         assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
-        
+
         assert!(!implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
     }
 

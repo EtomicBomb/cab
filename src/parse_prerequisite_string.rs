@@ -198,7 +198,10 @@ fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
             "(" => TokenKind::LeftParen,
             ")" => TokenKind::RightParen,
             _ if captures.name("score").is_some() => {
-                TokenKind::Qualification(Qualification::ExamScore(ExamScore::from_exam_score(&captures["exam"], &captures["score"]).unwrap()))
+                TokenKind::Qualification(Qualification::ExamScore(ExamScore { 
+                    exam: captures["exam"].to_string(), 
+                    score: captures["score"].parse().unwrap(),
+                }))
             },
             _ if captures.name("num").is_some() => {
                 if let Some(subject) = captures.name("subj") {
@@ -206,10 +209,10 @@ fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
                     last_subject = Some(subject);
                 }
 
-                TokenKind::Qualification(Qualification::Course(CourseCode {
-                    subject: last_subject.clone().ok_or(PrerequisiteStringError::NoSubjectContext { span })?,
-                    number: captures["num"].parse().unwrap(),
-                }))
+                TokenKind::Qualification(Qualification::Course(CourseCode::new(
+                    last_subject.clone().ok_or(PrerequisiteStringError::NoSubjectContext { span })?,
+                    captures["num"].parse().unwrap(),
+                ).unwrap()))
             },
             _ => unreachable!(),
         };

@@ -14,9 +14,16 @@
 * HISP 0750G: first year seminar, no mentioned level requirement.
 * BIOL 0940A: enrollment mentioned in two places
 * LACA 0510R: does not have its synonym course code in the registration notes.
+* LATN 0200, 0100, 110 have two any's
 
 # Notes
 
+* FIX ITALIAN, FIX APMA 1160, FIX FREN 0400, fix HISP 0200 HISP 0300 not recognize cab
+* Examples of informal prerequisites include auditions, demonstrated experience in the field, some programming experience, a specific level of knowledge in a foreign language, etc.
+
+https://www.brown.edu/academics/math/course-descriptions
+* https://selfservice.brown.edu/ss/bwckctlg.p_disp_dyn_ctlg
+* going all the way back to 2013 https://selfservice.brown.edu/ss/bwckctlg.p_display_courses
 * HIST courses numbers: 0 - undergrad only, 1 - accessible to all students, 2 -> grad only
 * `.stat == "X"` means the exact same thing as `.section == ""`
 * if the title contains a course code, it refers to its cannonical name

@@ -1,54 +1,94 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::{Index, IndexMut};
-use crate::restrictions::{Qualification, PrerequisiteTree, Conjunctive};
+use crate::restrictions::{CourseCode, Qualification, PrerequisiteTree, Conjunctive};
+use crate::process::Course;
 use std::fmt::{self, Write, Formatter};
 use crate::subject::{Subject, Subjects};
-use crate::AllRestrictions;
 use rand::{thread_rng, Rng};
+use std::io::{Write as _, Read};
+use once_cell::sync::Lazy;
+use std::process::{Command, Stdio};
+use std::fmt::Write as FmtWrite;
+use regex::{RegexBuilder, Regex};
+use std::io;
 
-pub struct SubjectGraphs {
-    subject_graphs: Vec<SubjectGraph>,
+fn graphviz_to_svg(graphviz: &str) -> io::Result<String> {
+    let mut dotted = Command::new("dot")
+        .arg("-Tsvg")
+        .arg("/dev/stdin")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+    dotted.stdin.take().unwrap().write_all(graphviz.as_bytes())?;
+    let mut svg = String::new();
+    dotted.stdout.take().unwrap().read_to_string(&mut svg)?;
+    dotted.wait()?;
+    Ok(svg)
 }
 
-impl SubjectGraphs {
-    pub fn new(restrictions: &AllRestrictions) -> SubjectGraphs {
-        let mut id_generator = IdGenerator::default();
-        let subject_graphs = Subjects::all().iter()
-            .map(|subject| SubjectGraph::new(subject, restrictions, &mut id_generator))
-            .collect();
-
-        SubjectGraphs { subject_graphs }
-    }
-
-    pub fn graphviz(&self) -> String {
-        let mut ret = String::from("digraph {\npackmode=\"graph\"\n");
-
-        for subject_graph in self.subject_graphs.iter() {
-            subject_graph.graphviz_cluster(&mut ret);
+fn svg_box(code: &CourseCode, course: Option<&Course>, x: f32, y: f32) -> String {
+    let mut ret = String::new();
+    let x = x - 102.0;
+    writeln!(ret, r#"<rect style="fill:#ffffff;stroke:#000000;stroke-width:3" width="102" height="44" x="{}" y="{}" />"#, x, y).unwrap();
+    writeln!(ret, r#"<text x="{}" y="{}" style="font-family:monospace;font-size:16px">{}</text>"#, x+3.5, y+17.0, code).unwrap();
+    if let Some(course) = course {
+        let range = course.semester_range();
+        if !range.is_full() {
+            writeln!(ret, r#"<text x="{}" y="{}" style="font-family:monospace;font-size:8px">{range}</text>"#, x+20.5, y+30.0).unwrap();
         }
+    }
+    ret
+}
 
-        ret.push_str("}");
-
-        ret
+fn svg_filter(svg: &mut String, courses: &HashMap<CourseCode, Course>) {
+    // static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<g id=".*?" class="node qual_(.*?)">.*?points="(.*?),(.*?) .*?</g>"#).unwrap());
+    static REGEX: Lazy<Regex> = Lazy::new(|| RegexBuilder::new(r#"<g id="node\d*" class="node qual_(.*?)".*?points="(.*?),(.*?) .*?</g>"#).dot_matches_new_line(true).build().unwrap());
+    while let Some(location) = REGEX.captures(&svg) {
+        let entire_range = location.get(0).unwrap().range();
+        let code = location[1].try_into().unwrap();
+        let top_left_x = location[2].parse::<f32>().unwrap();
+        let top_left_y = location[3].parse().unwrap();
+        let new_svg = svg_box(&code, courses.get(&code), top_left_x, top_left_y);
+        svg.replace_range(entire_range, &new_svg);
     }
 }
 
-pub struct SubjectGraph {
+pub fn svg(courses: &HashMap<CourseCode, Course>) -> io::Result<String> {
+    let mut id_generator = IdGenerator::default();
+    let subjects: HashSet<&str> = courses.keys().map(|code| code.subject()).collect();
+    let subject_graphs: Vec<_> = subjects.iter()
+        .map(|subject| SubjectGraph::new(subject, courses, &mut id_generator))
+        .collect();
+    let mut graphviz = String::from("digraph {\npackmode=\"graph\"\n");
+    for subject_graph in subject_graphs.iter() {
+        subject_graph.graphviz_cluster(&mut graphviz);
+    }
+    graphviz.push_str("}");
+
+    std::fs::write("viz.dot", &graphviz).unwrap();
+
+    eprintln!("Filtering through graphviz");
+    let mut svg = graphviz_to_svg(&graphviz)?;
+    eprintln!("Fixup svg");
+    svg_filter(&mut svg, courses);
+    Ok(svg)
+}
+
+struct SubjectGraph {
     nodes: Vec<Node>,
-    subject: Subject,
+    subject: String,
 }
 
 impl SubjectGraph {
-    pub fn new(subject: &Subject, restrictions: &AllRestrictions, id_generator: &mut IdGenerator) -> SubjectGraph {
-        let mut ret = SubjectGraph { nodes: Vec::new(), subject: subject.clone() };
-
-        for (course, restrictions) in restrictions.iter().filter(|(course, _)| &course.subject == subject) {
-            let node_index = ret.insert_qualification(&Qualification::Course(course.clone()), id_generator);
-
-            if let Some(prereq_tree) = &restrictions.prerequisite_restrictions {
+    fn new(subject: &str, restrictions: &HashMap<CourseCode, Course>, id_generator: &mut IdGenerator) -> SubjectGraph {
+        let mut ret = SubjectGraph { nodes: Vec::new(), subject: subject.to_string() };
+        for (code, course) in restrictions.iter().filter(|(code, _)| code.subject() == subject) {
+            let node_index = ret.insert_qualification(&Qualification::Course(code.clone()), id_generator);
+            if let Some(prereq_tree) = course.prerequisites() {
                 ret.insert(node_index, prereq_tree, id_generator);
             }
         }
-
         ret
     }
 
@@ -65,7 +105,6 @@ impl SubjectGraph {
                 let found = self.nodes.iter()
                     .position(|n| n.is_conjunctive(*conj) && self.is_equal(&n.dependencies, children))
                     .map(NodeIndex);
-
                 found.unwrap_or_else(|| {
                     let new_index = NodeIndex(self.nodes.len());
                     self.nodes.push(Node {
@@ -80,7 +119,6 @@ impl SubjectGraph {
                 })
             }
         };
-
         self[location].dependencies.push(to_insert);
     }
 
@@ -120,13 +158,13 @@ impl SubjectGraph {
             && self.nodes.iter().all(|o| !o.dependencies.contains(&node_index))
     }
 
-    pub fn graphviz_cluster(&self, string: &mut String) {
+    fn graphviz_cluster(&self, string: &mut String) {
         let abbreviation = self.subject.to_string();
         writeln!(string, "subgraph cluster_{} {{", abbreviation).unwrap();
         writeln!(string, "packmode=\"graph\"").unwrap();
-        writeln!(string, "label=\"{}\"", Subjects::all().name(&self.subject)).unwrap();
+        writeln!(string, "label=\"{}\"", self.subject).unwrap();
 
-        let color = Subjects::all().color(&self.subject);
+        let color = "808000";
         writeln!(string, "bgcolor=\"#{}\"", color).unwrap();
 
         for node in self.nodes.iter() {
@@ -194,7 +232,7 @@ impl fmt::Display for Id {
 }
 
 #[derive(Default)]
-pub struct IdGenerator(u32);
+struct IdGenerator(u32);
 
 impl IdGenerator {
     fn next(&mut self) -> Id {
@@ -205,18 +243,18 @@ impl IdGenerator {
 
 
 #[derive(Debug, Clone)]
-pub struct Node {
+struct Node {
     kind: NodeKind,
     dependencies: Vec<NodeIndex>,
     id: Id,
 }
 
 impl Node {
-    pub fn kind(&self) -> &NodeKind {
+    fn kind(&self) -> &NodeKind {
         &self.kind
     }
 
-    pub fn dependencies(&self) -> &[NodeIndex] {
+    fn dependencies(&self) -> &[NodeIndex] {
         &self.dependencies
     }
 
@@ -233,13 +271,13 @@ impl Node {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum NodeKind {
+enum NodeKind {
     Qualification(Qualification),
     Conjunctive(Conjunctive),
 }
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Eq, Ord, Hash)]
-pub struct NodeIndex(pub usize);
+struct NodeIndex(pub usize);
 
 impl fmt::Debug for NodeIndex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -249,17 +287,13 @@ impl fmt::Debug for NodeIndex {
 
 fn integer_square_root(n: u64) -> u64 {
     if n == 0 { return 0 }
-
     let mut x = n;
-
     let result = loop {
         let x_prev = x;
         x = (x + n / x) / 2;
-
         if x_prev == x || x_prev + 1 == x {
             break x_prev;
         }
     };
-
     result
 }
