@@ -66,8 +66,6 @@ pub fn svg(courses: &HashMap<CourseCode, Course>) -> io::Result<String> {
     }
     graphviz.push_str("}");
 
-    std::fs::write("viz.dot", &graphviz).unwrap();
-
     eprintln!("Filtering through graphviz");
     let mut svg = graphviz_to_svg(&graphviz)?;
     eprintln!("Fixup svg");
