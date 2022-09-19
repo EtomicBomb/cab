@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use std::collections::HashSet;
 use crate::restrictions::PrerequisiteTree;
 use crate::restrictions::Qualification;
-use crate::restrictions::Conjunctive;
+use crate::restrictions::Operator;
 use std::iter;
 use std::ops::BitAnd;
 use std::ops::BitOr;

@@ -1,5 +1,5 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
+//#![allow(dead_code)]
+//#![allow(unused_imports)]
 
 mod restrictions;
 mod parse_prerequisite_string;
@@ -14,7 +14,7 @@ use serde_json::Value;
 use regex::{RegexBuilder, Regex};
 use std::{io, fs};
 use std::collections::{HashMap};
-use crate::restrictions::{CourseCode, Qualification, PrerequisiteTree, Conjunctive};
+use crate::restrictions::{CourseCode, Qualification, PrerequisiteTree, Operator};
 use std::path::{Path, PathBuf};
 use std::io::{Write, Read};
 use once_cell::sync::Lazy;
@@ -27,8 +27,10 @@ use serde_json::de::IoRead;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-//    stage2("output/cab.jsonl", "output/minimized.jsonl")
-    courses_to_svg("output/minimized.jsonl")
+    stage2("output/cab.jsonl", "output/minimized.jsonl")?;
+    courses_to_svg("output/minimized.jsonl")?;
+    stage1("output/cab.jsonl").await?;
+    Ok(())
 }
 
 fn courses_to_svg<I: AsRef<Path>>(input: I) -> io::Result<()> {
@@ -67,7 +69,7 @@ fn stage2<I: AsRef<Path>, O: AsRef<Path>>(input: I, output: O) -> io::Result<()>
     Ok(())
 }
 
-async fn stage1() {
+async fn stage1<P: AsRef<Path>>(output: P) -> io::Result<()> {
     let terms = [
         "201600", // Summer 2016
         "201610", // Fall 2016
@@ -100,9 +102,10 @@ async fn stage1() {
     let client = Client::builder()
         .build()
         .expect("client not available");
-    let mut output = tokio::fs::File::create("cab.jsonl").await.unwrap();
+    let mut output = tokio::fs::File::create(output).await.unwrap();
     download::download(&client, &terms, 10, &mut output).await;
     output.shutdown().await.unwrap();
+    Ok(())
 }
 
 fn file_at(path: &str, extension: &str) -> io::Result<File> {

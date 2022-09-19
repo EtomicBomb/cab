@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::{Index, IndexMut};
-use crate::restrictions::{CourseCode, Qualification, PrerequisiteTree, Conjunctive};
+use crate::restrictions::{CourseCode, Qualification, PrerequisiteTree, Operator};
 use crate::process::Course;
 use std::fmt::{self, Write, Formatter};
 use rand::{thread_rng, Rng};
@@ -98,14 +98,14 @@ impl SubjectGraph {
             PrerequisiteTree::Qualification(qualification) => {
                 self.insert_qualification(qualification, id_generator)
             }
-            PrerequisiteTree::Conjunctive(conj, ref children) => {
+            PrerequisiteTree::Operator(conj, ref children) => {
                 let found = self.nodes.iter()
                     .position(|n| n.is_conjunctive(*conj) && self.is_equal(&n.dependencies, children))
                     .map(NodeIndex);
                 found.unwrap_or_else(|| {
                     let new_index = NodeIndex(self.nodes.len());
                     self.nodes.push(Node {
-                        kind: NodeKind::Conjunctive(*conj),
+                        kind: NodeKind::Operator(*conj),
                         dependencies: Vec::new(),
                         id: id_generator.next(),
                     });
@@ -126,7 +126,7 @@ impl SubjectGraph {
             .all(|(&d, c)| {
                 match c {
                     PrerequisiteTree::Qualification(q) => self[d].is_qualification(q),
-                    PrerequisiteTree::Conjunctive(conj, children) => {
+                    PrerequisiteTree::Operator(conj, children) => {
                         self[d].is_conjunctive(*conj)
                             && self.is_equal(&self[d].dependencies, children)
                     }
@@ -172,7 +172,7 @@ impl SubjectGraph {
                 NodeKind::Qualification(Qualification::Course(code)) => {
                     writeln!(string, "{} [label=\"\",shape=box, fixedsize=true, width=1.4, height=0.6, class=\"qual_{}\"]", node.id, code).unwrap();
                 }
-                NodeKind::Conjunctive(conjunctive) => {
+                NodeKind::Operator(conjunctive) => {
                     writeln!(string, "{} [label={}]", node.id, conjunctive).unwrap();
                 }
             }
@@ -255,8 +255,8 @@ impl Node {
         &self.dependencies
     }
 
-    fn is_conjunctive(&self, conj: Conjunctive) -> bool {
-        self.kind == NodeKind::Conjunctive(conj)
+    fn is_conjunctive(&self, conj: Operator) -> bool {
+        self.kind == NodeKind::Operator(conj)
     }
 
     fn is_qualification(&self, qualification: &Qualification) -> bool {
@@ -270,7 +270,7 @@ impl Node {
 #[derive(Clone, Debug, PartialEq)]
 enum NodeKind {
     Qualification(Qualification),
-    Conjunctive(Conjunctive),
+    Operator(Operator),
 }
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Eq, Ord, Hash)]

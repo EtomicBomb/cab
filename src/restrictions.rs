@@ -5,19 +5,12 @@ use serde::de::MapAccess;
 use serde::ser::{Serializer, SerializeSeq, SerializeMap};
 use serde::Serialize;
 use serde::ser;
-use std::convert::Infallible;
-use once_cell::sync::Lazy;
 use serde::{Deserialize};
-use regex::Regex;
 use std::fmt;
-use std::collections::{HashMap, HashSet};
-use std::fmt::{Formatter, Write};
+use std::fmt::{Write};
 use std::str::FromStr;
-use std::io::{BufReader, BufRead};
-use std::fs::File;
+use std::io::{BufRead};
 use std::iter::Sum;
-use std::ops::Add;
-use serde_json::Value;
 use crate::logic::IntoProduct;
 use crate::logic::Visitor;
 use crate::logic::Product;
@@ -25,34 +18,7 @@ use crate::logic::Product;
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum PrerequisiteTree {
     Qualification(Qualification),
-    Conjunctive(Conjunctive, Vec<PrerequisiteTree>),
-}
-
-impl PrerequisiteTree {
-    fn from_restrictions_string(restrictions: &str) -> Option<PrerequisiteTree> {
-        static PREREQ_INNER: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<p class="prereq">Prerequisites?: (.*?)\.<"#).unwrap());
-        static TAG_REMOVE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<.*?>"#).unwrap());
-        let prerequisites = &PREREQ_INNER.captures(restrictions)?[1];
-        let tags_removed = TAG_REMOVE.replace_all(prerequisites, "");
-        let tree = tags_removed.as_ref().try_into().unwrap();
-        Some(tree)
-    }
-
-    pub fn qualifications_set(&self) -> HashSet<Qualification> {
-        let mut ret = HashSet::new();
-
-        let mut stack = Vec::new();
-        stack.push(self);
-
-        while let Some(tree) = stack.pop() {
-            match tree {
-                PrerequisiteTree::Qualification(qualification) => { ret.insert(qualification.clone()); },
-                PrerequisiteTree::Conjunctive(_, children) => stack.extend(children),
-            }
-        }
-
-        ret
-    }
+    Operator(Operator, Vec<PrerequisiteTree>),
 }
 
 impl IntoProduct for PrerequisiteTree {
@@ -60,8 +26,8 @@ impl IntoProduct for PrerequisiteTree {
     fn into_product(&self, visitor: &mut Visitor<Self::Node>) -> Product {
         match self {
             PrerequisiteTree::Qualification(qualification) => visitor.visit_node(qualification.clone()),
-            PrerequisiteTree::Conjunctive(Conjunctive::All, children) => visitor.visit_all(children),
-            PrerequisiteTree::Conjunctive(Conjunctive::Any, children) => visitor.visit_any(children),
+            PrerequisiteTree::Operator(Operator::All, children) => visitor.visit_all(children),
+            PrerequisiteTree::Operator(Operator::Any, children) => visitor.visit_any(children),
         }
     }
 
@@ -70,30 +36,11 @@ impl IntoProduct for PrerequisiteTree {
     }
 
     fn all(trees: Vec<Self>) -> Self {
-        PrerequisiteTree::Conjunctive(Conjunctive::All, trees)
+        PrerequisiteTree::Operator(Operator::All, trees)
     }
 
     fn any(trees: Vec<Self>) -> Self {
-        PrerequisiteTree::Conjunctive(Conjunctive::Any, trees)
-    }
-}
-
-impl fmt::Display for PrerequisiteTree {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            PrerequisiteTree::Qualification(qual) => fmt::Display::fmt(qual, f),
-            PrerequisiteTree::Conjunctive(conj, children) => {
-                fmt::Display::fmt(conj, f)?;
-                f.write_char('(')?;
-                let mut comma = "";
-                for child in children {
-                    f.write_str(comma)?;
-                    fmt::Display::fmt(child, f)?;
-                    comma = ",";
-                }
-                f.write_char(')')
-            },
-        }
+        PrerequisiteTree::Operator(Operator::Any, trees)
     }
 }
 
@@ -111,7 +58,7 @@ impl ser::Serialize for PrerequisiteTree {
                 map.serialize_entry("score", score)?;
                 map.end()
             }
-            PrerequisiteTree::Conjunctive(conjunctive, children) => {
+            PrerequisiteTree::Operator(conjunctive, children) => {
                 let mut map = serializer.serialize_map(Some(1))?;
                 let conjunctive = conjunctive.to_string();
                 map.serialize_entry(conjunctive.as_str(), children)?; 
@@ -150,12 +97,12 @@ impl<'de> Deserialize<'de> for PrerequisiteTree {
                             value
                         }
                     }))),
-                    "any" => Ok(PrerequisiteTree::Conjunctive(
-                        Conjunctive::Any,
+                    "any" => Ok(PrerequisiteTree::Operator(
+                        Operator::Any,
                         map.next_value()?,
                     )),
-                    "all" => Ok(PrerequisiteTree::Conjunctive(
-                        Conjunctive::All,
+                    "all" => Ok(PrerequisiteTree::Operator(
+                        Operator::All,
                         map.next_value()?,
                     )),
                     _ => Err(Error::missing_field(missing_field)),
@@ -184,16 +131,16 @@ impl fmt::Display for Qualification {
 
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]
-pub enum Conjunctive {
+pub enum Operator {
     Any,
     All,
 }
 
-impl fmt::Display for Conjunctive {
+impl fmt::Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Conjunctive::Any => "any",
-            Conjunctive::All => "all",
+            Operator::Any => "any",
+            Operator::All => "all",
         })
     }
 }

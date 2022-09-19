@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::restrictions::{Conjunctive, PrerequisiteTree, Qualification, ExamScore, CourseCode};
+use crate::restrictions::{Operator, PrerequisiteTree, Qualification, ExamScore, CourseCode};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::fmt;
@@ -28,14 +28,14 @@ fn parse_any_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Prerequisit
     let token = parse_all_expr(tokens)?;
     ret.extend(token);
 
-    while tokens.peek_token()?.kind == TokenKind::Conjunctive(Conjunctive::Any) {
-        tokens.consume_token(&TokenKind::Conjunctive(Conjunctive::Any))?;
+    while tokens.peek_token()?.kind == TokenKind::Operator(Operator::Any) {
+        tokens.consume_token(&TokenKind::Operator(Operator::Any))?;
         let token = parse_all_expr(tokens)?;
         ret.extend(token);
     }
 
     if ret.len() < 2 { Ok(ret.pop().unwrap()) }
-    else { Ok(PrerequisiteTree::Conjunctive(Conjunctive::Any, ret)) }
+    else { Ok(PrerequisiteTree::Operator(Operator::Any, ret)) }
 }
 
 fn parse_all_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Option<PrerequisiteTree>, PrerequisiteStringError<'a>> {
@@ -43,14 +43,14 @@ fn parse_all_expr<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Option<Prer
     let token = parse_bottom(tokens)?;
     ret.extend(token);
 
-    while tokens.peek_token()?.kind == TokenKind::Conjunctive(Conjunctive::All) {
-        tokens.consume_token(&TokenKind::Conjunctive(Conjunctive::All))?;
+    while tokens.peek_token()?.kind == TokenKind::Operator(Operator::All) {
+        tokens.consume_token(&TokenKind::Operator(Operator::All))?;
         let token = parse_bottom(tokens)?;
         ret.extend(token);
     }
 
     if ret.len() < 2 { Ok(ret.pop()) }
-    else { Ok(Some(PrerequisiteTree::Conjunctive(Conjunctive::All, ret))) }
+    else { Ok(Some(PrerequisiteTree::Operator(Operator::All, ret))) }
 }
 
 fn parse_bottom<'a, 'b>(tokens: &'b mut TokenStream<'a>) -> Result<Option<PrerequisiteTree>, PrerequisiteStringError<'a>> {
@@ -79,19 +79,19 @@ impl<'a> TokenStream<'a> {
         /// Replaces Token::Comma in `tokens` with the right conjunctive.
         fn de_comma<'a>(tokens: &mut [Token<'a>]) -> Result<(), PrerequisiteStringError<'a>> {
             // each paren level needs its own conjunctive token stored
-            let mut conjunctives: HashMap<i32, Conjunctive> = HashMap::new();
+            let mut conjunctives: HashMap<i32, Operator> = HashMap::new();
             let mut paren_level = 0;
 
             for token in tokens.iter_mut().rev() {
                 let matching_token = &token.kind;
 
                 match matching_token {
-                    TokenKind::Conjunctive(conj) => { conjunctives.insert(paren_level, *conj); }
+                    TokenKind::Operator(conj) => { conjunctives.insert(paren_level, *conj); }
                     TokenKind::LeftParen => paren_level += 1,
                     TokenKind::RightParen => paren_level -= 1,
                     TokenKind::Comma => token.kind = match conjunctives.get(&paren_level) {
-                        Some(&conj) => TokenKind::Conjunctive(conj),
-                        None => TokenKind::Conjunctive(Conjunctive::Any),
+                        Some(&conj) => TokenKind::Operator(conj),
+                        None => TokenKind::Operator(Operator::Any),
                     },
                     _ => {},
                 }
@@ -146,7 +146,7 @@ impl<'a> fmt::Display for Span<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Qualification(Qualification),
-    Conjunctive(Conjunctive),
+    Operator(Operator),
     Comma,
     LeftParen,
     RightParen,
@@ -158,7 +158,7 @@ impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TokenKind::Qualification(qual) => fmt::Display::fmt(qual, f),
-            TokenKind::Conjunctive(conj) => fmt::Display::fmt(conj, f),
+            TokenKind::Operator(conj) => fmt::Display::fmt(conj, f),
             TokenKind::Comma => f.write_str(","),
             TokenKind::LeftParen => f.write_str("("),
             TokenKind::RightParen => f.write_str(")"),
@@ -190,8 +190,8 @@ fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
         let kind = match entire_match {
             " " => continue,
             "minimum score of WAIVE in 'Graduate Student PreReq'" => TokenKind::GraduateStudentWaive,
-            "and" => TokenKind::Conjunctive(Conjunctive::All),
-            "or" => TokenKind::Conjunctive(Conjunctive::Any),
+            "and" => TokenKind::Operator(Operator::All),
+            "or" => TokenKind::Operator(Operator::Any),
             "," => TokenKind::Comma,
             "(" => TokenKind::LeftParen,
             ")" => TokenKind::RightParen,
