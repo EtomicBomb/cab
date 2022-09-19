@@ -28,24 +28,20 @@ fn parse_any_expr<'a, 'b>(
 ) -> Result<PrerequisiteTree, PrerequisiteStringError<'a>> {
     let mut ret = Vec::new();
     let token = parse_all_expr(tokens)?;
-    ret.extend(token);
+    ret.push(token);
 
     while tokens.peek_token()?.kind == TokenKind::Operator(Operator::Any) {
         tokens.consume_token(&TokenKind::Operator(Operator::Any))?;
         let token = parse_all_expr(tokens)?;
-        ret.extend(token);
+        ret.push(token);
     }
 
-    if ret.len() < 2 {
-        Ok(ret.pop().unwrap())
-    } else {
-        Ok(PrerequisiteTree::Operator(Operator::Any, ret))
-    }
+    Ok(PrerequisiteTree::Operator(Operator::Any, ret))
 }
 
 fn parse_all_expr<'a, 'b>(
     tokens: &'b mut TokenStream<'a>,
-) -> Result<Option<PrerequisiteTree>, PrerequisiteStringError<'a>> {
+) -> Result<PrerequisiteTree, PrerequisiteStringError<'a>> {
     let mut ret = Vec::new();
     let token = parse_bottom(tokens)?;
     ret.extend(token);
@@ -56,11 +52,7 @@ fn parse_all_expr<'a, 'b>(
         ret.extend(token);
     }
 
-    if ret.len() < 2 {
-        Ok(ret.pop())
-    } else {
-        Ok(Some(PrerequisiteTree::Operator(Operator::All, ret)))
-    }
+    Ok(PrerequisiteTree::Operator(Operator::All, ret))
 }
 
 fn parse_bottom<'a, 'b>(

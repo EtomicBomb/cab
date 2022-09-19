@@ -158,18 +158,6 @@ impl Products {
             .sum()
     }
 
-    /// Whenever a implies B:
-    /// a=>(B || ...) == eliminate
-    /// Example 1:
-    /// if a=>b && b=>c && c=>(d || e) && a=>(d || e || f)
-    /// we can eliminate the last sum
-    /// we'll go through all terms like the third one and see if any other expressions
-    /// are like the fourth one (4.rhs >= 3.rhs && 4.lhs => 3.lhs)
-    /// Example 2:
-    /// a => b || c
-    /// b => d
-    /// c => e
-    /// a => d || e || f     can still eliminate this last sum
     fn minimize(&mut self) {
         // a -> (b || C); b->C === a->C
         fn find_redundant(products: &Products) -> Option<(Symbol, usize, Symbol)> {

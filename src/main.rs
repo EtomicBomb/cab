@@ -23,8 +23,8 @@ use tokio::io::AsyncWriteExt;
 #[tokio::main]
 async fn main() -> io::Result<()> {
     stage2("output/cab.jsonl", "output/minimized.jsonl")?;
-    courses_to_svg("output/minimized.jsonl")?;
-    stage1("output/cab.jsonl").await?;
+//    courses_to_svg("output/minimized.jsonl")?;
+//    stage1("output/cab.jsonl").await?;
     Ok(())
 }
 
