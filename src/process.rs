@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::num::ParseIntError;
 use crate::restrictions::CourseCode;
 use crate::restrictions::PrerequisiteTree;
-use std::borrow::Cow;
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 use regex::NoExpand;

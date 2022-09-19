@@ -1,21 +1,9 @@
-use std::iter::once;
 use std::hash::Hash;
-use std::collections::BinaryHeap;
-use std::cmp::Reverse;
-use std::cmp::Ordering;
-use std::cell::RefCell;
 use std::fmt;
-use crate::restrictions::CourseCode;
 use std::collections::HashMap;
-use std::collections::VecDeque;
 use std::collections::HashSet;
-use crate::restrictions::PrerequisiteTree;
-use crate::restrictions::Qualification;
-use crate::restrictions::Operator;
-use std::iter;
 use std::ops::BitAnd;
 use std::ops::BitOr;
-use crate::process::Course;
 use std::collections::BTreeSet;
 
 #[derive(PartialOrd, Ord, Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -33,10 +21,9 @@ struct Sum {
     inner: BTreeSet<Symbol>,
 }
 
-use std::iter::ExactSizeIterator;
 
 impl Sum {
-    fn iter(&self) -> impl ExactSizeIterator + Iterator<Item=Symbol> + '_ {
+    fn iter(&self) -> impl Iterator<Item=Symbol> + '_ {
         self.inner.iter().cloned()
     }
  
@@ -50,16 +37,8 @@ impl Sum {
         self.inner.contains(&symbol)
     }
 
-    fn difference_size(&self, other: &Sum) -> usize {
-        self.inner.difference(&other.inner).count()
-    }
-
     fn is_subset(&self, other: &Sum) -> bool {
         self.inner.is_subset(&other.inner)
-    }
-
-    fn len(&self) -> usize {
-        self.inner.len()
     }
 
     fn remove(&mut self, symbol: Symbol) {
@@ -231,6 +210,10 @@ impl Products {
         }
     }
 
+    fn implies_test(&self, lhs: &Sum, rhs: &Sum) -> bool {
+        self.implies(lhs, rhs, None)
+    }
+
     fn implies(&self, lhs: &Sum, rhs: &Sum, disallow: Option<(Symbol, usize)>) -> bool {
         // we return true iff we can find an equivalent lhs that's a subset of rhs
         // because a ⇒ a ∨ b
@@ -390,9 +373,9 @@ mod implications {
     #[test]
     fn foo() {
         let implications = Products::from([(Symbol(0), Product(vec![Sum::from([Symbol(1)])]))]);
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(0)])));
-        assert!(implications.implies(&Sum::from([Symbol(1)]), &Sum::from([Symbol(1)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(0)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(1)]), &Sum::from([Symbol(1)])));
     }
 
     #[test]
@@ -404,13 +387,13 @@ mod implications {
             (Symbol(3), Product::from([Sum::from([Symbol(4)])])),
             (Symbol(4), Product::from([Sum::from([Symbol(5)])])),
         ]);
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(0)])));
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
-        assert!(implications.implies(&Sum::from([Symbol(1)]), &Sum::from([Symbol(2)])));
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(5)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(0)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(1)]), &Sum::from([Symbol(2)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(5)])));
 
-        assert!(!implications.implies(&Sum::from([Symbol(1)]), &Sum::from([Symbol(0)])));
-        assert!(!implications.implies(&Sum::from([Symbol(5)]), &Sum::from([Symbol(0)])));
+        assert!(!implications.implies_test(&Sum::from([Symbol(1)]), &Sum::from([Symbol(0)])));
+        assert!(!implications.implies_test(&Sum::from([Symbol(5)]), &Sum::from([Symbol(0)])));
     }
 
     #[test]
@@ -420,12 +403,12 @@ mod implications {
             (Symbol(1), Product::from([Sum::from([Symbol(3)])])),
             (Symbol(2), Product::from([Sum::from([Symbol(3)])])),
         ]);
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
-        assert!(implications.implies(&Sum::from([Symbol(1)]), &Sum::from([Symbol(3)])));
-        assert!(implications.implies(&Sum::from([Symbol(2)]), &Sum::from([Symbol(3)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(1)]), &Sum::from([Symbol(3)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(2)]), &Sum::from([Symbol(3)])));
 
-        assert!(!implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
-        assert!(!implications.implies(&Sum::from([Symbol(3)]), &Sum::from([Symbol(0)])));
+        assert!(!implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
+        assert!(!implications.implies_test(&Sum::from([Symbol(3)]), &Sum::from([Symbol(0)])));
     }
 
     #[test]
@@ -437,9 +420,9 @@ mod implications {
             (Symbol(3), Product::from([Sum::from([Symbol(5)])])),
             (Symbol(4), Product::from([Sum::from([Symbol(5)])])),
         ]);
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(5)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(5)])));
 
-        assert!(!implications.implies(&Sum::from([Symbol(2)]), &Sum::from([Symbol(3)])));
+        assert!(!implications.implies_test(&Sum::from([Symbol(2)]), &Sum::from([Symbol(3)])));
     }
 
     #[test]
@@ -449,9 +432,9 @@ mod implications {
             (Symbol(1), Product::from([Sum::from([Symbol(2)])])),
             (Symbol(2), Product::from([Sum::from([Symbol(0)])])),
         ]);
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
 
-        assert!(!implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
+        assert!(!implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
     }
 
     #[test]
@@ -461,10 +444,10 @@ mod implications {
             (Symbol(1), Product::from([Sum::from([Symbol(2)])])),
             (Symbol(2), Product::from([Sum::from([Symbol(3)]), Sum::from([Symbol(0)])])),
         ]);
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
 
-        assert!(!implications.implies(&Sum::from([Symbol(3)]), &Sum::from([Symbol(0)])));
+        assert!(!implications.implies_test(&Sum::from([Symbol(3)]), &Sum::from([Symbol(0)])));
     }
 
     #[test]
@@ -474,10 +457,10 @@ mod implications {
             (Symbol(1), Product::from([Sum::from([Symbol(2)])])),
             (Symbol(2), Product::from([Sum::from([Symbol(0)]), Sum::from([Symbol(3)])])),
         ]);
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
-        assert!(implications.implies(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(3)])));
+        assert!(implications.implies_test(&Sum::from([Symbol(0)]), &Sum::from([Symbol(1)])));
 
-        assert!(!implications.implies(&Sum::from([Symbol(3)]), &Sum::from([Symbol(0)])));
+        assert!(!implications.implies_test(&Sum::from([Symbol(3)]), &Sum::from([Symbol(0)])));
     }
 }
 

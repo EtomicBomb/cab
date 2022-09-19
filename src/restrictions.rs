@@ -2,15 +2,11 @@ use serde::de::Error;
 use serde::Deserializer;
 use serde::de;
 use serde::de::MapAccess;
-use serde::ser::{Serializer, SerializeSeq, SerializeMap};
+use serde::ser::{Serializer, SerializeMap};
 use serde::Serialize;
 use serde::ser;
 use serde::{Deserialize};
 use std::fmt;
-use std::fmt::{Write};
-use std::str::FromStr;
-use std::io::{BufRead};
-use std::iter::Sum;
 use crate::logic::IntoProduct;
 use crate::logic::Visitor;
 use crate::logic::Product;
@@ -170,10 +166,6 @@ impl CourseCode {
 
     pub fn subject(&self) -> &str {
         &self.subject
-    }
-
-    pub fn number(&self) -> &str {
-        &self.number        
     }
 }
 

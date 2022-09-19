@@ -3,7 +3,7 @@ use crate::restrictions::{Operator, PrerequisiteTree, Qualification, ExamScore, 
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::fmt;
-use std::fmt::{Formatter, Write};
+use std::fmt::{Formatter};
 
 /// # Grammar
 /// Class | Rules
@@ -231,7 +231,6 @@ fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
 pub enum PrerequisiteStringError<'a> {
     InvalidToken { string: &'a str, start: usize },
     ExpectedToken { expected: TokenKind, found: Token<'a> },
-    BadSubject { span: Span<'a> },
     NoSubjectContext { span: Span<'a> },
     ExpectedLeftParenOrQualification { found: Token<'a> },
     EarlyEoi,
@@ -244,8 +243,6 @@ impl<'a> fmt::Debug for PrerequisiteStringError<'a> {
                 write!(f, "'{} [{}]': invalid token", &string[..*start], &string[*start..]),
             PrerequisiteStringError::ExpectedToken { expected, found } =>
                 write!(f, "'{}': expected {}", found.span, expected),
-            PrerequisiteStringError::BadSubject { span } =>
-                write!(f, "'{}': subject could not be found in database", span),
             PrerequisiteStringError::NoSubjectContext { span: location } =>
                 write!(f, "'{}': no subject found for course number", location),
             PrerequisiteStringError::ExpectedLeftParenOrQualification { found } =>

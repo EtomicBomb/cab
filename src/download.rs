@@ -1,15 +1,14 @@
 use bytes::Bytes;
 use std::marker::Unpin;
-use crate::restrictions::CourseCode; 
-use std::{io, fs};
-use std::path::Path;
+ 
+
+
 use std::io::Write as IoWrite;
-use std::fmt::Write as FmtWrite;
 use reqwest::Client;
 use serde_json::json;
 use serde::Deserialize;
 use futures::prelude::*;
-use std::convert::AsRef;
+
 use std::iter::IntoIterator;
 use tokio::io::AsyncWriteExt;
 use tokio::io::AsyncWrite;

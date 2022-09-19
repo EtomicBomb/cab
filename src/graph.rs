@@ -8,7 +8,6 @@ use rand::{thread_rng, Rng};
 use std::io::{Write as _, Read};
 use once_cell::sync::Lazy;
 use std::process::{Command, Stdio};
-use std::fmt::Write as FmtWrite;
 use regex::{RegexBuilder, Regex};
 use std::io;
 
