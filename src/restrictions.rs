@@ -1,15 +1,15 @@
-use serde::de::Error;
-use serde::Deserializer;
-use serde::de;
-use serde::de::MapAccess;
-use serde::ser::{Serializer, SerializeMap};
-use serde::Serialize;
-use serde::ser;
-use serde::{Deserialize};
-use std::fmt;
 use crate::logic::IntoProduct;
-use crate::logic::Visitor;
 use crate::logic::Product;
+use crate::logic::Visitor;
+use serde::de;
+use serde::de::Error;
+use serde::de::MapAccess;
+use serde::ser;
+use serde::ser::{SerializeMap, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum PrerequisiteTree {
@@ -21,7 +21,9 @@ impl IntoProduct for PrerequisiteTree {
     type Node = Qualification;
     fn into_product(&self, visitor: &mut Visitor<Self::Node>) -> Product {
         match self {
-            PrerequisiteTree::Qualification(qualification) => visitor.visit_node(qualification.clone()),
+            PrerequisiteTree::Qualification(qualification) => {
+                visitor.visit_node(qualification.clone())
+            }
             PrerequisiteTree::Operator(Operator::All, children) => visitor.visit_all(children),
             PrerequisiteTree::Operator(Operator::Any, children) => visitor.visit_any(children),
         }
@@ -48,7 +50,10 @@ impl ser::Serialize for PrerequisiteTree {
                 map.serialize_entry("course", course)?;
                 map.end()
             }
-            PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { exam, score })) => {
+            PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore {
+                exam,
+                score,
+            })) => {
                 let mut map = serializer.serialize_map(Some(2))?;
                 map.serialize_entry("exam", exam)?;
                 map.serialize_entry("score", score)?;
@@ -57,7 +62,7 @@ impl ser::Serialize for PrerequisiteTree {
             PrerequisiteTree::Operator(conjunctive, children) => {
                 let mut map = serializer.serialize_map(Some(1))?;
                 let conjunctive = conjunctive.to_string();
-                map.serialize_entry(conjunctive.as_str(), children)?; 
+                map.serialize_entry(conjunctive.as_str(), children)?;
                 map.end()
             }
         }
@@ -81,26 +86,23 @@ impl<'de> Deserialize<'de> for PrerequisiteTree {
 
                 match key.as_str() {
                     "course" => Ok(PrerequisiteTree::Qualification(Qualification::Course(
-                        map.next_value::<CourseCode>()?
-                        ))),
-                    "exam" => Ok(PrerequisiteTree::Qualification(Qualification::ExamScore(ExamScore { 
-                        exam: map.next_value()?,
-                        score: {
-                            let (key, value): (String, _) = map.next_entry()?.ok_or(Error::missing_field("score"))?;
-                            if key != "score" {
-                                return Err(Error::missing_field("thing"));
-                            }
-                            value
-                        }
-                    }))),
-                    "any" => Ok(PrerequisiteTree::Operator(
-                        Operator::Any,
-                        map.next_value()?,
-                    )),
-                    "all" => Ok(PrerequisiteTree::Operator(
-                        Operator::All,
-                        map.next_value()?,
-                    )),
+                        map.next_value::<CourseCode>()?,
+                    ))),
+                    "exam" => Ok(PrerequisiteTree::Qualification(Qualification::ExamScore(
+                        ExamScore {
+                            exam: map.next_value()?,
+                            score: {
+                                let (key, value): (String, _) =
+                                    map.next_entry()?.ok_or(Error::missing_field("score"))?;
+                                if key != "score" {
+                                    return Err(Error::missing_field("thing"));
+                                }
+                                value
+                            },
+                        },
+                    ))),
+                    "any" => Ok(PrerequisiteTree::Operator(Operator::Any, map.next_value()?)),
+                    "all" => Ok(PrerequisiteTree::Operator(Operator::All, map.next_value()?)),
                     _ => Err(Error::missing_field(missing_field)),
                 }
             }
@@ -143,7 +145,7 @@ impl fmt::Display for Operator {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub struct ExamScore {
-    pub exam: String, 
+    pub exam: String,
     pub score: u32,
 }
 
@@ -187,4 +189,3 @@ impl fmt::Display for CourseCode {
         write!(f, "{} {}", self.subject, self.number)
     }
 }
-

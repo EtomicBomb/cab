@@ -1,15 +1,15 @@
+use crate::process::Course;
+use crate::restrictions::{CourseCode, Operator, PrerequisiteTree, Qualification};
+use once_cell::sync::Lazy;
+use rand::{thread_rng, Rng};
+use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::{Index, IndexMut};
-use crate::restrictions::{CourseCode, Qualification, PrerequisiteTree, Operator};
-use crate::process::Course;
-use std::fmt::{self, Write, Formatter};
-use rand::{thread_rng, Rng};
-use std::io::{Write as _, Read};
-use once_cell::sync::Lazy;
-use std::process::{Command, Stdio};
-use regex::{RegexBuilder, Regex};
+use std::fmt::{self, Formatter, Write};
 use std::io;
+use std::io::{Read, Write as _};
+use std::ops::{Index, IndexMut};
+use std::process::{Command, Stdio};
 
 fn graphviz_to_svg(graphviz: &str) -> io::Result<String> {
     let mut dotted = Command::new("dot")
@@ -18,7 +18,11 @@ fn graphviz_to_svg(graphviz: &str) -> io::Result<String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
-    dotted.stdin.take().unwrap().write_all(graphviz.as_bytes())?;
+    dotted
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(graphviz.as_bytes())?;
     let mut svg = String::new();
     dotted.stdout.take().unwrap().read_to_string(&mut svg)?;
     dotted.wait()?;
@@ -29,11 +33,24 @@ fn svg_box(code: &CourseCode, course: Option<&Course>, x: f32, y: f32) -> String
     let mut ret = String::new();
     let x = x - 102.0;
     writeln!(ret, r#"<rect style="fill:#ffffff;stroke:#000000;stroke-width:3" width="102" height="44" x="{}" y="{}" />"#, x, y).unwrap();
-    writeln!(ret, r#"<text x="{}" y="{}" style="font-family:monospace;font-size:16px">{}</text>"#, x+3.5, y+17.0, code).unwrap();
+    writeln!(
+        ret,
+        r#"<text x="{}" y="{}" style="font-family:monospace;font-size:16px">{}</text>"#,
+        x + 3.5,
+        y + 17.0,
+        code
+    )
+    .unwrap();
     if let Some(course) = course {
         let range = course.semester_range();
         if !range.is_full() {
-            writeln!(ret, r#"<text x="{}" y="{}" style="font-family:monospace;font-size:8px">{range}</text>"#, x+20.5, y+30.0).unwrap();
+            writeln!(
+                ret,
+                r#"<text x="{}" y="{}" style="font-family:monospace;font-size:8px">{range}</text>"#,
+                x + 20.5,
+                y + 30.0
+            )
+            .unwrap();
         }
     }
     ret
@@ -41,7 +58,14 @@ fn svg_box(code: &CourseCode, course: Option<&Course>, x: f32, y: f32) -> String
 
 fn svg_filter(svg: &mut String, courses: &HashMap<CourseCode, Course>) {
     // static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<g id=".*?" class="node qual_(.*?)">.*?points="(.*?),(.*?) .*?</g>"#).unwrap());
-    static REGEX: Lazy<Regex> = Lazy::new(|| RegexBuilder::new(r#"<g id="node\d*" class="node qual_(.*?)".*?points="(.*?),(.*?) .*?</g>"#).dot_matches_new_line(true).build().unwrap());
+    static REGEX: Lazy<Regex> = Lazy::new(|| {
+        RegexBuilder::new(
+            r#"<g id="node\d*" class="node qual_(.*?)".*?points="(.*?),(.*?) .*?</g>"#,
+        )
+        .dot_matches_new_line(true)
+        .build()
+        .unwrap()
+    });
     while let Some(location) = REGEX.captures(&svg) {
         let entire_range = location.get(0).unwrap().range();
         let code = location[1].try_into().unwrap();
@@ -55,7 +79,8 @@ fn svg_filter(svg: &mut String, courses: &HashMap<CourseCode, Course>) {
 pub fn svg(courses: &HashMap<CourseCode, Course>) -> io::Result<String> {
     let mut id_generator = IdGenerator::default();
     let subjects: HashSet<&str> = courses.keys().map(|code| code.subject()).collect();
-    let subject_graphs: Vec<_> = subjects.iter()
+    let subject_graphs: Vec<_> = subjects
+        .iter()
         .map(|subject| SubjectGraph::new(subject, courses, &mut id_generator))
         .collect();
     let mut graphviz = String::from("digraph {\npackmode=\"graph\"\n");
@@ -77,10 +102,21 @@ struct SubjectGraph {
 }
 
 impl SubjectGraph {
-    fn new(subject: &str, restrictions: &HashMap<CourseCode, Course>, id_generator: &mut IdGenerator) -> SubjectGraph {
-        let mut ret = SubjectGraph { nodes: Vec::new(), subject: subject.to_string() };
-        for (code, course) in restrictions.iter().filter(|(code, _)| code.subject() == subject) {
-            let node_index = ret.insert_qualification(&Qualification::Course(code.clone()), id_generator);
+    fn new(
+        subject: &str,
+        restrictions: &HashMap<CourseCode, Course>,
+        id_generator: &mut IdGenerator,
+    ) -> SubjectGraph {
+        let mut ret = SubjectGraph {
+            nodes: Vec::new(),
+            subject: subject.to_string(),
+        };
+        for (code, course) in restrictions
+            .iter()
+            .filter(|(code, _)| code.subject() == subject)
+        {
+            let node_index =
+                ret.insert_qualification(&Qualification::Course(code.clone()), id_generator);
             if let Some(prereq_tree) = course.prerequisites() {
                 ret.insert(node_index, prereq_tree, id_generator);
             }
@@ -88,18 +124,30 @@ impl SubjectGraph {
         ret
     }
 
-    fn iter(&self) -> impl Iterator<Item=(NodeIndex, &Node)> {
-        self.nodes.iter().enumerate().map(|(i, node)| (NodeIndex(i), node))
+    fn iter(&self) -> impl Iterator<Item = (NodeIndex, &Node)> {
+        self.nodes
+            .iter()
+            .enumerate()
+            .map(|(i, node)| (NodeIndex(i), node))
     }
 
-    fn insert(&mut self, location: NodeIndex, prereq_tree: &PrerequisiteTree, id_generator: &mut IdGenerator) {
+    fn insert(
+        &mut self,
+        location: NodeIndex,
+        prereq_tree: &PrerequisiteTree,
+        id_generator: &mut IdGenerator,
+    ) {
         let to_insert = match prereq_tree {
             PrerequisiteTree::Qualification(qualification) => {
                 self.insert_qualification(qualification, id_generator)
             }
             PrerequisiteTree::Operator(conj, ref children) => {
-                let found = self.nodes.iter()
-                    .position(|n| n.is_conjunctive(*conj) && self.is_equal(&n.dependencies, children))
+                let found = self
+                    .nodes
+                    .iter()
+                    .position(|n| {
+                        n.is_conjunctive(*conj) && self.is_equal(&n.dependencies, children)
+                    })
                     .map(NodeIndex);
                 found.unwrap_or_else(|| {
                     let new_index = NodeIndex(self.nodes.len());
@@ -119,22 +167,25 @@ impl SubjectGraph {
     }
 
     fn is_equal(&self, dependencies: &[NodeIndex], prereq_tree: &[PrerequisiteTree]) -> bool {
-        if dependencies.len() != prereq_tree.len() { return false }
+        if dependencies.len() != prereq_tree.len() {
+            return false;
+        }
 
-        dependencies.iter().zip(prereq_tree)
-            .all(|(&d, c)| {
-                match c {
-                    PrerequisiteTree::Qualification(q) => self[d].is_qualification(q),
-                    PrerequisiteTree::Operator(conj, children) => {
-                        self[d].is_conjunctive(*conj)
-                            && self.is_equal(&self[d].dependencies, children)
-                    }
-                }
-            })
+        dependencies.iter().zip(prereq_tree).all(|(&d, c)| match c {
+            PrerequisiteTree::Qualification(q) => self[d].is_qualification(q),
+            PrerequisiteTree::Operator(conj, children) => {
+                self[d].is_conjunctive(*conj) && self.is_equal(&self[d].dependencies, children)
+            }
+        })
     }
 
-    fn insert_qualification(&mut self, qualification: &Qualification, id_generator: &mut IdGenerator) -> NodeIndex {
-        let result = self.iter()
+    fn insert_qualification(
+        &mut self,
+        qualification: &Qualification,
+        id_generator: &mut IdGenerator,
+    ) -> NodeIndex {
+        let result = self
+            .iter()
             .find(|(_, node)| node.is_qualification(qualification))
             .map(|(i, _)| i);
 
@@ -151,7 +202,10 @@ impl SubjectGraph {
 
     fn is_singlet(&self, node_index: NodeIndex) -> bool {
         self[node_index].dependencies.is_empty()
-            && self.nodes.iter().all(|o| !o.dependencies.contains(&node_index))
+            && self
+                .nodes
+                .iter()
+                .all(|o| !o.dependencies.contains(&node_index))
     }
 
     fn graphviz_cluster(&self, string: &mut String) {
@@ -177,22 +231,30 @@ impl SubjectGraph {
             }
         }
 
-        let (singlets, others): (Vec<_>, Vec<_>) = self.iter()
-            .partition(|&(i, _)| self.is_singlet(i));
+        let (singlets, others): (Vec<_>, Vec<_>) =
+            self.iter().partition(|&(i, _)| self.is_singlet(i));
 
         let singlets_sqrt = integer_square_root(singlets.len() as u64) as usize + 1;
 
-
-        writeln!(string, "subgraph cluster{} {{\nstyle=\"invis\"", thread_rng().gen::<u32>()).unwrap();
+        writeln!(
+            string,
+            "subgraph cluster{} {{\nstyle=\"invis\"",
+            thread_rng().gen::<u32>()
+        )
+        .unwrap();
 
         for (i, pair) in singlets.windows(2).enumerate() {
             if i % singlets_sqrt != 0 {
-                writeln!(string, "{} -> {} [style=\"invis\"]", pair[0].1.id, pair[1].1.id).unwrap();
+                writeln!(
+                    string,
+                    "{} -> {} [style=\"invis\"]",
+                    pair[0].1.id, pair[1].1.id
+                )
+                .unwrap();
             }
         }
 
         writeln!(string, "}}").unwrap();
-
 
         for (_, node) in others {
             for &dependency in node.dependencies() {
@@ -236,7 +298,6 @@ impl IdGenerator {
         Id(self.0)
     }
 }
-
 
 #[derive(Debug, Clone)]
 struct Node {
@@ -282,7 +343,9 @@ impl fmt::Debug for NodeIndex {
 }
 
 fn integer_square_root(n: u64) -> u64 {
-    if n == 0 { return 0 }
+    if n == 0 {
+        return 0;
+    }
     let mut x = n;
     let result = loop {
         let x_prev = x;

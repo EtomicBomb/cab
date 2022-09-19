@@ -1,20 +1,20 @@
+use crate::restrictions::CourseCode;
+use crate::restrictions::PrerequisiteTree;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::num::ParseIntError;
-use crate::restrictions::CourseCode;
-use crate::restrictions::PrerequisiteTree;
 
 use once_cell::sync::Lazy;
-use regex::Regex;
 use regex::NoExpand;
-use std::convert::Infallible;
+use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
-use std::iter;
-use serde_json::StreamDeserializer;
 use serde_json::de;
-use std::str::FromStr;
+use serde_json::StreamDeserializer;
+use std::convert::Infallible;
 use std::fmt;
+use std::iter;
+use std::str::FromStr;
 
 fn yes_or_no(string: &str) -> Option<bool> {
     match string {
@@ -25,8 +25,10 @@ fn yes_or_no(string: &str) -> Option<bool> {
 }
 
 fn enrollment_from_seats(string: &str) -> Option<u16> {
-    static SEATS_MAX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<span class="seats_max">(\d+?)</span>"#).unwrap());
-    static SEATS_AVAILABLE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<span class="seats_avail">(-?\d+?)</span>"#).unwrap());
+    static SEATS_MAX: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r#"<span class="seats_max">(\d+?)</span>"#).unwrap());
+    static SEATS_AVAILABLE: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r#"<span class="seats_avail">(-?\d+?)</span>"#).unwrap());
     let max: i16 = match SEATS_MAX.captures(string) {
         Some(captures) => captures.get(1).unwrap().as_str().parse().unwrap(),
         None => return None,
@@ -39,13 +41,18 @@ fn enrollment_from_seats(string: &str) -> Option<u16> {
 }
 
 fn enrollment_from_html(string: &str) -> Option<u16> {
-    static ENROLLMENT: Lazy<Regex> = Lazy::new(|| Regex::new(r#"Current enrollment: (\d+)"#).unwrap());
-    ENROLLMENT.captures(string).map(|captures| captures.get(1).unwrap().as_str().parse().unwrap())
+    static ENROLLMENT: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r#"Current enrollment: (\d+)"#).unwrap());
+    ENROLLMENT
+        .captures(string)
+        .map(|captures| captures.get(1).unwrap().as_str().parse().unwrap())
 }
 
 fn section(string: &str) -> Option<u8> {
     static SECTION: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^S(\d{2})$"#).unwrap());
-    SECTION.captures(string).map(|captures| captures.get(1).unwrap().as_str().parse().unwrap())
+    SECTION
+        .captures(string)
+        .map(|captures| captures.get(1).unwrap().as_str().parse().unwrap())
 }
 
 #[derive(Clone, Debug)]
@@ -57,7 +64,8 @@ enum Title {
 impl FromStr for Title {
     type Err = Infallible;
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        static COURSE_CODE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"[A-Z]+ \d{4}[A-Z]?"#).unwrap());
+        static COURSE_CODE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r#"[A-Z]+ \d{4}[A-Z]?"#).unwrap());
         Ok(match COURSE_CODE.find(string) {
             None => Title::Title(string.to_string()),
             Some(cannonical) => Title::AliasOf(CourseCode::try_from(cannonical.as_str()).unwrap()),
@@ -69,7 +77,7 @@ impl FromStr for Title {
 struct Demographics {
     #[serde(default)]
     #[serde(alias = "FY")]
-    freshmen: u16, 
+    freshmen: u16,
     #[serde(default)]
     #[serde(alias = "So")]
     sophomores: u16,
@@ -100,7 +108,7 @@ fn strip_html(string: &str) -> String {
 }
 
 #[derive(Serialize, Deserialize)]
-struct Semester { 
+struct Semester {
     inner: u16,
 }
 
@@ -109,7 +117,7 @@ impl fmt::Display for Semester {
         match self.inner {
             13 => f.write_str("GM"),
             14 => f.write_str("GP"),
-            s => write!(f, "{:02}", s+1),
+            s => write!(f, "{:02}", s + 1),
         }
     }
 }
@@ -123,7 +131,9 @@ impl FromStr for Semester {
             "F2" => 2,
             s => s.parse()?,
         };
-        Ok(Semester { inner: semester_number - 1 })
+        Ok(Semester {
+            inner: semester_number - 1,
+        })
     }
 }
 
@@ -141,7 +151,9 @@ impl SemesterRange {
     const GRADUATE: SemesterRange = SemesterRange::UNDERGRADUATE.complement();
 
     const fn to(semester: u16) -> SemesterRange {
-        SemesterRange { inner: (1 << semester) - 1 }    
+        SemesterRange {
+            inner: (1 << semester) - 1,
+        }
     }
 
     pub fn is_full(&self) -> bool {
@@ -149,25 +161,34 @@ impl SemesterRange {
     }
 
     fn add(self, semester: Semester) -> Self {
-        SemesterRange { inner: self.inner | (1 << (semester.inner)) }
+        SemesterRange {
+            inner: self.inner | (1 << (semester.inner)),
+        }
     }
 
-
     const fn complement(self) -> Self {
-        SemesterRange { inner: self.inner ^ SemesterRange::FULL.inner }
+        SemesterRange {
+            inner: self.inner ^ SemesterRange::FULL.inner,
+        }
     }
 
     fn intersection(self, other: Self) -> Self {
-        SemesterRange { inner: self.inner & other.inner }
+        SemesterRange {
+            inner: self.inner & other.inner,
+        }
     }
 
-    fn semesters(self) -> impl Iterator<Item=Semester> {
+    fn semesters(self) -> impl Iterator<Item = Semester> {
         let mut inner = self.inner;
         iter::from_fn(move || {
-            if inner == 0 { return None }
-            let semester = inner.trailing_zeros();   
+            if inner == 0 {
+                return None;
+            }
+            let semester = inner.trailing_zeros();
             inner &= !(1 << semester);
-            Some(Semester { inner: semester as u16 })
+            Some(Semester {
+                inner: semester as u16,
+            })
         })
     }
 }
@@ -175,7 +196,11 @@ impl SemesterRange {
 impl TryFrom<Vec<u16>> for SemesterRange {
     type Error = Infallible;
     fn try_from(semesters: Vec<u16>) -> Result<Self, Self::Error> {
-        Ok(semesters.into_iter().fold(SemesterRange::EMPTY, |accum, inner| accum.add(Semester { inner })))
+        Ok(semesters
+            .into_iter()
+            .fold(SemesterRange::EMPTY, |accum, inner| {
+                accum.add(Semester { inner })
+            }))
     }
 }
 
@@ -185,12 +210,12 @@ impl From<SemesterRange> for Vec<u16> {
     }
 }
 
-
 impl<'a> TryFrom<&'a str> for SemesterRange {
     type Error = Infallible;
     fn try_from(string: &'a str) -> Result<Self, Self::Error> {
         static DELIM: Lazy<Regex> = Lazy::new(|| Regex::new(r#", | or "#).unwrap());
-        Ok(DELIM.split(string)
+        Ok(DELIM
+            .split(string)
             .map(Semester::from_str)
             .map(Result::unwrap)
             .fold(SemesterRange::EMPTY, SemesterRange::add))
@@ -232,9 +257,14 @@ mod tests {
     fn semseter_range2() {
         let text = "05, 06, 07, 08, 09, 10, 11, 12 or 13";
         let range = SemesterRange::try_from(text).unwrap();
-        assert_eq!(range.to_string(), "05, 06, 07, 08, 09, 10, 11, 12, 13", "{}", range.inner);
+        assert_eq!(
+            range.to_string(),
+            "05, 06, 07, 08, 09, 10, 11, 12, 13",
+            "{}",
+            range.inner
+        );
     }
-    
+
     #[test]
     fn semseter_range3() {
         let range = SemesterRange::EMPTY;
@@ -251,11 +281,8 @@ mod tests {
 
 fn program_string(string: &str) -> Vec<String> {
     static DELIM: Lazy<Regex> = Lazy::new(|| Regex::new(r#", | or "#).unwrap());
-    DELIM.split(string)
-        .map(str::to_string)
-        .collect()
+    DELIM.split(string).map(str::to_string).collect()
 }
-
 
 #[derive(Debug)]
 struct Qualifications {
@@ -267,33 +294,40 @@ struct Qualifications {
 impl FromStr for Qualifications {
     type Err = Infallible;
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        static TAG: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^(<p class="prereq">Prerequisites?: (?P<prereq>.*?)\.(<br/><sup>\*</sup> May be taken concurrently\.)?</p>)?(<p class="cls">Enrollment limited to students with a semester level of (?P<cls>.*?)\.</p>)?(<p class="cls">Students with a semester level of (?P<clsc>.*?) may <strong>not</strong> enroll\.</p>)?(<p class="maj">Enrollment is limited to students with a major in (?P<maj>.*?)\.</p>)?(<p class="maj">Students cannot enroll who have a concentration in (.*?)\.</p>)?(<p class="prg">Enrollment limited to students in the (?P<prg>.*?) programs\.</p>)?(<p class="prg">Enrollment limited to students in the following programs:<ul>(?P<prgl>.*?)</ul></p>)?(<p class="prg">Enrollment limited to students in the (?P<prgs>.*?) program.</p>)?(<p class="prg">Enrollment limited to students in the (?P<prg1>.*?) or (?P<prg2>.*?) programs.</p>)?(<p class="prg">Students in the (.*?) program may <strong>not</strong> enroll.</p>)?(<p class="lvl">Enrollment is limited to (?P<lvl>Undergraduate|Graduate) level students\.</p>)?(<p class="lvl">(?P<lvlc>Undergraduate|Graduate) level students may <strong>not</strong> enroll\.</p>)?(<p class="chr">Enrollment limited to students in the (?P<chr>.*?) chohort\.</p>)?$"#).unwrap());
+        static TAG: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r#"^(<p class="prereq">Prerequisites?: (?P<prereq>.*?)\.(<br/><sup>\*</sup> May be taken concurrently\.)?</p>)?(<p class="cls">Enrollment limited to students with a semester level of (?P<cls>.*?)\.</p>)?(<p class="cls">Students with a semester level of (?P<clsc>.*?) may <strong>not</strong> enroll\.</p>)?(<p class="maj">Enrollment is limited to students with a major in (?P<maj>.*?)\.</p>)?(<p class="maj">Students cannot enroll who have a concentration in (.*?)\.</p>)?(<p class="prg">Enrollment limited to students in the (?P<prg>.*?) programs\.</p>)?(<p class="prg">Enrollment limited to students in the following programs:<ul>(?P<prgl>.*?)</ul></p>)?(<p class="prg">Enrollment limited to students in the (?P<prgs>.*?) program.</p>)?(<p class="prg">Enrollment limited to students in the (?P<prg1>.*?) or (?P<prg2>.*?) programs.</p>)?(<p class="prg">Students in the (.*?) program may <strong>not</strong> enroll.</p>)?(<p class="lvl">Enrollment is limited to (?P<lvl>Undergraduate|Graduate) level students\.</p>)?(<p class="lvl">(?P<lvlc>Undergraduate|Graduate) level students may <strong>not</strong> enroll\.</p>)?(<p class="chr">Enrollment limited to students in the (?P<chr>.*?) chohort\.</p>)?$"#).unwrap()
+        });
         let captures = TAG.captures(string).unwrap();
-        let prerequisites = captures.name("prereq")
+        let prerequisites = captures
+            .name("prereq")
             .as_ref()
             .map(regex::Match::as_str)
             .map(strip_html)
             .as_deref()
             .map(PrerequisiteTree::try_from)
             .map(Result::unwrap);
-        let semester_level = captures.name("cls")
+        let semester_level = captures
+            .name("cls")
             .as_ref()
             .map(regex::Match::as_str)
             .map(SemesterRange::try_from)
             .map(Result::unwrap)
             .unwrap_or_default();
-        let semester_level_complement = captures.name("clsc")
+        let semester_level_complement = captures
+            .name("clsc")
             .as_ref()
             .map(regex::Match::as_str)
             .map(SemesterRange::try_from)
             .map(Result::unwrap)
             .map(SemesterRange::complement)
             .unwrap_or_default();
-        let programs = captures.name("prg")
+        let programs = captures
+            .name("prg")
             .as_ref()
             .map(regex::Match::as_str)
             .map(program_string);
-        let level = captures.name("lvl")
+        let level = captures
+            .name("lvl")
             .as_ref()
             .map(regex::Match::as_str)
             .and_then(|level| match level {
@@ -305,7 +339,11 @@ impl FromStr for Qualifications {
         let semester_range = semester_level
             .intersection(semester_level_complement)
             .intersection(level);
-        Ok(Qualifications { prerequisites, programs, semester_range })
+        Ok(Qualifications {
+            prerequisites,
+            programs,
+            semester_range,
+        })
     }
 }
 
@@ -319,16 +357,16 @@ fn instructors(string: &str) -> Vec<String> {
 
 #[derive(Debug)]
 struct Record {
-    restricted: bool, 
+    restricted: bool,
     code: CourseCode,
-    section: Option<u8>, 
+    section: Option<u8>,
     title: Title,
     description: String,
-    qualifications: Qualifications, 
+    qualifications: Qualifications,
     enrollment: Option<u16>,
     instructors: Vec<String>,
     demographics: Option<Demographics>,
-    srcdb: String, 
+    srcdb: String,
 }
 
 impl FromStr for Record {
@@ -353,7 +391,18 @@ impl From<Raw> for Record {
         let instructors = instructors(&raw.instructordetail_html);
         let demographics = serde_json::from_str(&raw.regdemog_json).ok();
         let srcdb = raw.srcdb;
-        Record { restricted, code, section, title, description, qualifications, enrollment, instructors, demographics, srcdb }
+        Record {
+            restricted,
+            code,
+            section,
+            title,
+            description,
+            qualifications,
+            enrollment,
+            instructors,
+            demographics,
+            srcdb,
+        }
     }
 }
 
@@ -410,7 +459,11 @@ impl Course {
         &self.semester_range
     }
 
-    fn from_offerings(code: CourseCode, mut offerings: Vec<Record>, aliases: Vec<CourseCode>) -> Course {
+    fn from_offerings(
+        code: CourseCode,
+        mut offerings: Vec<Record>,
+        aliases: Vec<CourseCode>,
+    ) -> Course {
         offerings.sort_by(|a, b| a.srcdb.cmp(&b.srcdb).reverse()); // recent first
         let latest = offerings.first().unwrap();
         let title = match latest.title {
@@ -418,12 +471,14 @@ impl Course {
             _ => unreachable!("method precondition"),
         };
         let description = latest.description.clone();
-        let prerequisites = offerings.iter()
+        let prerequisites = offerings
+            .iter()
             .find_map(|offering| offering.qualifications.prerequisites.as_ref())
             .cloned();
         let semester_range = latest.qualifications.semester_range;
         let restricted = latest.restricted;
-        let offerings = offerings.into_iter()
+        let offerings = offerings
+            .into_iter()
             .map(|offering| Offering {
                 date: offering.srcdb,
                 section: offering.section.unwrap(),
@@ -445,9 +500,7 @@ impl Course {
     }
 }
 
-pub fn process<'a, R: de::Read<'a>>(
-    source: R,
-) -> Vec<Course> {
+pub fn process<'a, R: de::Read<'a>>(source: R) -> Vec<Course> {
     #[derive(Default)]
     struct Details {
         offerings: Vec<Record>,
@@ -457,16 +510,20 @@ pub fn process<'a, R: de::Read<'a>>(
     StreamDeserializer::<_, Raw>::new(source)
         .filter_map(Result::ok)
         .map(Record::from)
-        .for_each(|record| {
-            match record.title {
-                Title::Title(_) if record.section.is_some() => {
-                    map.entry(record.code.clone()).or_default().offerings.push(record);
-                }, 
-                Title::AliasOf(cannonical) => {
-                    map.entry(cannonical).or_default().aliases.insert(record.code);
-                },
-                _ => {},
+        .for_each(|record| match record.title {
+            Title::Title(_) if record.section.is_some() => {
+                map.entry(record.code.clone())
+                    .or_default()
+                    .offerings
+                    .push(record);
             }
+            Title::AliasOf(cannonical) => {
+                map.entry(cannonical)
+                    .or_default()
+                    .aliases
+                    .insert(record.code);
+            }
+            _ => {}
         });
     map.into_iter()
         .filter(|(_, Details { offerings, .. })| !offerings.is_empty())
@@ -476,4 +533,3 @@ pub fn process<'a, R: de::Read<'a>>(
         })
         .collect()
 }
-

@@ -1,19 +1,17 @@
 use bytes::Bytes;
 use std::marker::Unpin;
- 
 
-
-use std::io::Write as IoWrite;
-use reqwest::Client;
-use serde_json::json;
-use serde::Deserialize;
 use futures::prelude::*;
+use reqwest::Client;
+use serde::Deserialize;
+use serde_json::json;
+use std::io::Write as IoWrite;
 
 use std::iter::IntoIterator;
-use tokio::io::AsyncWriteExt;
 use tokio::io::AsyncWrite;
-    
-// CSCI 0200 
+use tokio::io::AsyncWriteExt;
+
+// CSCI 0200
 //{"group":"code:VISA 1110","key":"","srcdb":"202210","matched":"crn:17685,18097"}
 //{"group":"code:VISA 1110","key":"crn:17685","srcdb":"202210","matched":"crn:17685,18097"}
 
@@ -24,7 +22,8 @@ pub async fn download<'a, W: AsyncWrite + Unpin>(
     mut destination: W,
 ) {
     let stubs = stubs(client, terms, max_connections).await;
-    let mut json_chunks = course_details(client, &stubs, max_connections).await
+    let mut json_chunks = course_details(client, &stubs, max_connections)
+        .await
         .boxed_local();
 
     while let Some(mut json) = json_chunks.next().await {
@@ -38,31 +37,29 @@ struct Stub<'a> {
     term: &'a str,
 }
 
-async fn stubs<'a>(
-    client: &Client,
-    terms: &'a [&'a str],
-    max_connections: usize,
-) -> Vec<Stub<'a>> {
+async fn stubs<'a>(client: &Client, terms: &'a [&'a str], max_connections: usize) -> Vec<Stub<'a>> {
     stream::iter(terms)
         .enumerate()
         .map(move |(i, term)| async move {
-            eprint!("[{}/{}] requesting stub {term}\r", i+1, terms.len());
+            eprint!("[{}/{}] requesting stub {term}\r", i + 1, terms.len());
             std::io::stdout().flush().unwrap();
             let crns = crns(client, term).await?;
-            let stubs: Vec<_> = crns.into_iter()
+            let stubs: Vec<_> = crns
+                .into_iter()
                 .map(|Crn { crn }| Stub { crn, term })
                 .collect();
             Ok::<_, reqwest::Error>(stubs)
         })
         .buffer_unordered(max_connections)
-        .filter_map(|b| async { 
+        .filter_map(|b| async {
             match b {
                 Ok(b) => Some(b),
                 Err(e) => {
                     eprintln!("stub lookup failed: {e:?}");
                     None
                 }
-            }})
+            }
+        })
         .flat_map(stream::iter)
         .collect()
         .await
@@ -79,7 +76,8 @@ async fn crns(client: &Client, term: &str) -> reqwest::Result<Vec<Crn>> {
         results: Vec<Crn>,
     }
 
-    let result = client.post("https://cab.brown.edu/api/?page=fose&route=search")
+    let result = client
+        .post("https://cab.brown.edu/api/?page=fose&route=search")
         .json(&json!({
             "other": {"srcdb": term},
             "criteria": [
@@ -97,35 +95,40 @@ async fn crns(client: &Client, term: &str) -> reqwest::Result<Vec<Crn>> {
 }
 
 async fn course_details<'a>(
-    client: &'a Client, 
+    client: &'a Client,
     stubs: &'a [Stub<'_>],
     max_connections: usize,
-) -> impl Stream<Item=Bytes> + 'a
+) -> impl Stream<Item = Bytes> + 'a
 where
 {
     stream::iter(stubs)
         .enumerate()
         .map(move |(i, stub)| {
-            eprint!("[{}/{}] requesting detail {}/{}\r", i+1, stubs.len(), stub.term, stub.crn);
+            eprint!(
+                "[{}/{}] requesting detail {}/{}\r",
+                i + 1,
+                stubs.len(),
+                stub.term,
+                stub.crn
+            );
             std::io::stdout().flush().unwrap();
             course_detail(client, stub)
         })
         .buffer_unordered(max_connections)
-        .filter_map(|b| async { 
+        .filter_map(|b| async {
             match b {
                 Ok(b) => Some(b),
                 Err(e) => {
                     eprintln!("course detail lookup failed: {e:?}");
                     None
                 }
-            }})
+            }
+        })
 }
 
-async fn course_detail(
-    client: &Client, 
-    stub: &Stub<'_>,
-) -> reqwest::Result<Bytes> {
-    client.post("https://cab.brown.edu/api/?page=fose&route=details")
+async fn course_detail(client: &Client, stub: &Stub<'_>) -> reqwest::Result<Bytes> {
+    client
+        .post("https://cab.brown.edu/api/?page=fose&route=details")
         .json(&json!({
             "srcdb": stub.term,
             "key": format!("crn:{}", stub.crn),

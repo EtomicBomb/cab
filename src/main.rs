@@ -1,24 +1,24 @@
 //#![allow(dead_code)]
 //#![allow(unused_imports)]
 
-mod restrictions;
-mod parse_prerequisite_string;
-mod graph;
 mod download;
-mod process;
+mod graph;
 mod logic;
+mod parse_prerequisite_string;
+mod process;
+mod restrictions;
 
-use serde_json::StreamDeserializer;
 use crate::process::Course;
-use std::{io};
-use std::collections::{HashMap};
-use crate::restrictions::{Qualification};
-use std::path::{Path};
-use std::io::{Write};
+use crate::restrictions::Qualification;
 use reqwest::Client;
-use tokio::io::AsyncWriteExt;
-use std::fs::File;
 use serde_json::de::IoRead;
+use serde_json::StreamDeserializer;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io;
+use std::io::Write;
+use std::path::Path;
+use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -33,7 +33,10 @@ fn courses_to_svg<I: AsRef<Path>>(input: I) -> io::Result<()> {
     let courses: Vec<Course> = StreamDeserializer::new(IoRead::new(&input))
         .into_iter()
         .collect::<serde_json::Result<_>>()?;
-    let courses = courses.into_iter().map(|course| (course.code().clone(), course)).collect();
+    let courses = courses
+        .into_iter()
+        .map(|course| (course.code().clone(), course))
+        .collect();
     let svg = crate::graph::svg(&courses)?;
     let mut output = file_at("output/graphs/graph", ".svg").unwrap();
     output.write_all(svg.as_bytes()).unwrap();
@@ -46,8 +49,12 @@ fn stage2<I: AsRef<Path>, O: AsRef<Path>>(input: I, output: O) -> io::Result<()>
     eprintln!("Reading from file");
     let mut courses = process::process(IoRead::new(&input));
     eprintln!("Read {}", courses.len());
-    let minimized = courses.iter()
-        .filter_map(|course| Some((Qualification::Course(course.code().clone()), course.prerequisites()?)));
+    let minimized = courses.iter().filter_map(|course| {
+        Some((
+            Qualification::Course(course.code().clone()),
+            course.prerequisites()?,
+        ))
+    });
     eprintln!("Minimizing");
     let minimized: HashMap<_, _> = logic::minimize(minimized).collect();
     for course in courses.iter_mut() {
@@ -94,9 +101,7 @@ async fn stage1<P: AsRef<Path>>(output: P) -> io::Result<()> {
         "202215", // Winter 2023
         "202220", // Spring 2023
     ];
-    let client = Client::builder()
-        .build()
-        .expect("client not available");
+    let client = Client::builder().build().expect("client not available");
     let mut output = tokio::fs::File::create(output).await.unwrap();
     download::download(&client, &terms, 10, &mut output).await;
     output.shutdown().await.unwrap();
@@ -112,7 +117,7 @@ fn file_at(path: &str, extension: &str) -> io::Result<File> {
             .write(true)
             .open(format!("{path}{number}{extension}"));
         match file {
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {},
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
             file => return file,
         }
     }
