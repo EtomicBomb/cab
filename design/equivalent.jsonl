@@ -35,8 +35,8 @@
     {
         "cannonical": {"group": "Intro Applied Math"},
         "members": [
-            {"course": {"course": "APMA 0340"},
-            {"course": {"course": "APMA 0360"},
+            {"course": "APMA 0340"},
+            {"course": "APMA 0360"},
         ],
         "implies": [],
     },

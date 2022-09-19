@@ -1,10 +1,8 @@
-use crate::subject::Subject;
 use std::collections::HashMap;
 use crate::restrictions::{Conjunctive, PrerequisiteTree, Qualification, ExamScore, CourseCode};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::fmt;
-use crate::subject::Subjects;
 use std::fmt::{Formatter, Write};
 
 /// # Grammar

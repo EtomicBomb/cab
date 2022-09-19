@@ -3,7 +3,6 @@
 
 mod restrictions;
 mod parse_prerequisite_string;
-mod subject;
 mod graph;
 mod download;
 mod process;
@@ -28,8 +27,8 @@ use serde_json::de::IoRead;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-//    stage2("cab.jsonl", "minimized.jsonl")
-    courses_to_svg("minimized.jsonl")
+//    stage2("output/cab.jsonl", "output/minimized.jsonl")
+    courses_to_svg("output/minimized.jsonl")
 }
 
 fn courses_to_svg<I: AsRef<Path>>(input: I) -> io::Result<()> {
@@ -39,7 +38,7 @@ fn courses_to_svg<I: AsRef<Path>>(input: I) -> io::Result<()> {
         .collect::<serde_json::Result<_>>()?;
     let courses = courses.into_iter().map(|course| (course.code().clone(), course)).collect();
     let svg = crate::graph::svg(&courses)?;
-    let mut output = file_at("output/graph", ".svg").unwrap();
+    let mut output = file_at("output/graphs/graph", ".svg").unwrap();
     output.write_all(svg.as_bytes()).unwrap();
     Ok(())
 }

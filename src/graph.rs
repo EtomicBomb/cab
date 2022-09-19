@@ -4,7 +4,6 @@ use std::ops::{Index, IndexMut};
 use crate::restrictions::{CourseCode, Qualification, PrerequisiteTree, Conjunctive};
 use crate::process::Course;
 use std::fmt::{self, Write, Formatter};
-use crate::subject::{Subject, Subjects};
 use rand::{thread_rng, Rng};
 use std::io::{Write as _, Read};
 use once_cell::sync::Lazy;
