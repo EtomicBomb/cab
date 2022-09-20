@@ -1,7 +1,7 @@
-use crate::logic::Tree;
-use crate::logic::Symbol;
 use crate::logic::Product;
-use crate::logic::{visit_symbol, visit_all, visit_any};
+use crate::logic::Symbol;
+use crate::logic::Tree;
+use crate::logic::{visit_all, visit_any, visit_symbol};
 use serde::de;
 use serde::de::Error;
 use serde::de::MapAccess;
@@ -10,6 +10,7 @@ use serde::ser::{SerializeMap, Serializer};
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
+use std::cmp::Ordering;
 use std::fmt;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -66,10 +67,22 @@ pub enum Qualification {
 }
 
 impl Symbol for Qualification {
-    fn rank(&self) -> Option<u32> {
-        match self {
-            Qualification::Course(..) => None,
-            Qualification::ExamScore(ExamScore { score, .. }) => Some(*score),
+    fn cmp_rank(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Qualification::Course(c1), Qualification::Course(c2)) => {
+                c1.eq(c2).then_some(Ordering::Equal)
+            }
+            (
+                Qualification::ExamScore(ExamScore {
+                    exam: e1,
+                    score: s1,
+                }),
+                Qualification::ExamScore(ExamScore {
+                    exam: e2,
+                    score: s2,
+                }),
+            ) => e1.eq(e2).then(|| s1.cmp(s2)),
+            _ => None,
         }
     }
 }

@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -7,7 +8,11 @@ use std::ops::BitAnd;
 use std::ops::BitOr;
 
 pub trait Symbol: Ord + Eq + Hash + Clone {
-    fn rank(&self) -> Option<u32>;
+    fn cmp_rank(&self, other: &Self) -> Option<Ordering>;
+
+    fn ge(&self, other: &Self) -> bool {
+        self.cmp_rank(other).map(Ordering::is_ge).unwrap_or(false)
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Debug)]
@@ -20,7 +25,7 @@ impl<S: Symbol> Sum<S> {
         self.inner.iter()
     }
 
-    fn into_iter(self) -> impl Iterator<Item=S> {
+    fn into_iter(self) -> impl Iterator<Item = S> {
         self.inner.into_iter()
     }
 
@@ -32,6 +37,10 @@ impl<S: Symbol> Sum<S> {
 
     fn contains(&self, symbol: &S) -> bool {
         self.inner.contains(symbol)
+    }
+
+    fn difference<'a>(&'a self, other: &'a Sum<S>) -> impl Iterator<Item = &S> {
+        self.inner.difference(&other.inner)
     }
 
     fn is_subset(&self, other: &Sum<S>) -> bool {
@@ -82,11 +91,11 @@ impl<S: Symbol> Product<S> {
         self.0.is_empty()
     }
 
-    fn iter(&self) -> impl Iterator<Item=&'_ Sum<S>> {
+    fn iter(&self) -> impl Iterator<Item = &'_ Sum<S>> {
         self.0.iter()
     }
 
-    fn into_iter(self) -> impl Iterator<Item=Sum<S>> {
+    fn into_iter(self) -> impl Iterator<Item = Sum<S>> {
         self.0.into_iter()
     }
 }
@@ -139,27 +148,27 @@ impl<S: Symbol> Products<S> {
     }
 
     fn find_redundant(&self) -> Option<(S, usize, S)> {
-            self.iter().find_map(|(lhs, product)| {
-                product.iter().enumerate().find_map(|(sum_index, ref sum)| {
-                    sum.iter()
-                        .find(|&s| {
-                            let sum = sum.without(s);
-                            self.implies(&Sum::from([s.clone()]), &sum, None)
-                        })
-                        .map(|s| (lhs.clone(), sum_index, s.clone()))
-                })
+        self.iter().find_map(|(lhs, product)| {
+            product.iter().enumerate().find_map(|(sum_index, ref sum)| {
+                sum.iter()
+                    .find(|&s| {
+                        let sum = sum.without(s);
+                        self.implies(&Sum::from([s.clone()]), &sum, None)
+                    })
+                    .map(|s| (lhs.clone(), sum_index, s.clone()))
             })
-        }
+        })
+    }
 
-        fn find_thingy(&self) -> Option<(S, usize)> {
-            self.iter().find_map(|(lhs, product)| {
-                product
-                    .iter()
-                    .enumerate()
-                    .find(|&(b, ref sum)| self.implies(&Sum::from([lhs.clone()]), sum, Some((&lhs, b))))
-                    .map(|(b, _)| (lhs.clone(), b))
-            })
-        }
+    fn find_thingy(&self) -> Option<(S, usize)> {
+        self.iter().find_map(|(lhs, product)| {
+            product
+                .iter()
+                .enumerate()
+                .find(|&(b, ref sum)| self.implies(&Sum::from([lhs.clone()]), sum, Some((&lhs, b))))
+                .map(|(b, _)| (lhs.clone(), b))
+        })
+    }
 
     fn minimize(&mut self) {
         // a -> (b || C); b->C === a->C
@@ -188,14 +197,14 @@ impl<S: Symbol> Products<S> {
         // because a ⇒ a ∨ b
         let mut seen = HashSet::from([lhs.clone()]);
         let mut heap = Vec::from([lhs.clone()]);
-
         while let Some(lhs) = heap.pop() {
-            if lhs.is_subset(rhs) {
-                //                assert!(lhs.iter().all(|l| self.implies(&Sum::from([l]), rhs, None)));
-                //                eprintln!("({}) ({})", lhs, rhs);
+            let is_subset = lhs.difference(&rhs).all(|l| {
+                rhs.iter()
+                    .any(|r| l.cmp_rank(r).map(Ordering::is_ge).unwrap_or(false))
+            });
+            if is_subset {
                 return true;
             }
-
             for sym in lhs.iter() {
                 if let Some(product) = self.get(sym) {
                     for (i, sum) in product.iter().enumerate() {
@@ -205,7 +214,8 @@ impl<S: Symbol> Products<S> {
                         let child_valid = disallow != Some((sym, i))
                             && !seen.contains(&child)
                             && !child.iter().any(|s| {
-                                !rhs.contains(s)
+                                !rhs.iter()
+                                    .any(|r| s.cmp_rank(r).map(Ordering::is_ge).unwrap_or(false))
                                     && self.get(s).map(Product::is_empty).unwrap_or(true)
                             });
                         if child_valid {
@@ -216,7 +226,6 @@ impl<S: Symbol> Products<S> {
                 }
             }
         }
-
         false
     }
 }
@@ -233,9 +242,9 @@ pub fn visit_symbol<S: Symbol>(symbol: S) -> Product<S> {
     Product::from([Sum::from([symbol])])
 }
 
-pub fn visit_all<'b, S, T, I>(iter: I) -> Product<S> 
+pub fn visit_all<'b, S, T, I>(iter: I) -> Product<S>
 where
-    T: Tree<Symbol=S> + 'b,
+    T: Tree<Symbol = S> + 'b,
     S: Symbol,
     I: IntoIterator<Item = &'b T>,
 {
@@ -244,11 +253,11 @@ where
         .fold(Product::and_identity(), BitAnd::bitand)
 }
 
-pub fn visit_any<'b, S, T, I>(iter: I) -> Product<S> 
+pub fn visit_any<'b, S, T, I>(iter: I) -> Product<S>
 where
-    T: Tree<Symbol=S> + 'b,
+    T: Tree<Symbol = S> + 'b,
     S: Symbol,
-    I: IntoIterator<Item=&'b T>,
+    I: IntoIterator<Item = &'b T>,
 {
     iter.into_iter()
         .map(|tree| tree.into_product())
@@ -266,7 +275,7 @@ pub trait Tree: Sized {
 /// # Returns `None` means false
 fn sum_into_tree<T, S>(sum: Sum<S>) -> Option<T>
 where
-    T: Tree<Symbol=S>,
+    T: Tree<Symbol = S>,
     S: Symbol,
 {
     let mut symbols: Vec<_> = sum.into_iter().map(T::symbol).collect();
@@ -280,7 +289,7 @@ where
 /// # Returns `None` means false
 fn product_into_tree<T, S>(product: Product<S>) -> Option<T>
 where
-    T: Tree<Symbol=S>,
+    T: Tree<Symbol = S>,
     S: Symbol,
 {
     let mut sums = product
@@ -297,19 +306,22 @@ where
 pub fn minimize<'a, 'b, T, S, M>(trees: M) -> impl Iterator<Item = (S, Option<T>)>
 where
     'b: 'a,
-    T: Tree<Symbol=S> + 'b,
+    T: Tree<Symbol = S> + 'b,
     S: Symbol,
-    M: IntoIterator<Item=(S, &'a T)>,
+    M: IntoIterator<Item = (S, &'a T)>,
 {
     let products = trees
         .into_iter()
         .map(|(symbol, tree)| (symbol, tree.into_product()))
         .collect();
     let mut products = Products { products };
+    let len_before = products.len();
     products.minimize();
-    products.products.into_iter().map(move |(symbol, product)| {
-        (symbol, product_into_tree(product))
-    })
+    eprintln!("Before: {}, After: {}", len_before, products.len());
+    products
+        .products
+        .into_iter()
+        .map(move |(symbol, product)| (symbol, product_into_tree(product)))
 }
 
 #[cfg(test)]
@@ -318,19 +330,21 @@ mod implications {
     use super::Products;
     use super::Sum;
     use super::Symbol;
+    use std::cmp::Ordering;
 
     #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
     pub struct TestSymbol(u32);
 
     impl Symbol for TestSymbol {
-        fn rank(&self) -> Option<u32> {
+        fn cmp_rank(&self, _other: &Self) -> Option<Ordering> {
             None
         }
     }
 
     #[test]
     fn foo() {
-        let implications = Products::from([(TestSymbol(0), Product::from([Sum::from([TestSymbol(1)])]))]);
+        let implications =
+            Products::from([(TestSymbol(0), Product::from([Sum::from([TestSymbol(1)])]))]);
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(1)])));
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(0)])));
         assert!(implications.implies_test(&Sum::from([TestSymbol(1)]), &Sum::from([TestSymbol(1)])));
@@ -350,8 +364,12 @@ mod implications {
         assert!(implications.implies_test(&Sum::from([TestSymbol(1)]), &Sum::from([TestSymbol(2)])));
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(5)])));
 
-        assert!(!implications.implies_test(&Sum::from([TestSymbol(1)]), &Sum::from([TestSymbol(0)])));
-        assert!(!implications.implies_test(&Sum::from([TestSymbol(5)]), &Sum::from([TestSymbol(0)])));
+        assert!(
+            !implications.implies_test(&Sum::from([TestSymbol(1)]), &Sum::from([TestSymbol(0)]))
+        );
+        assert!(
+            !implications.implies_test(&Sum::from([TestSymbol(5)]), &Sum::from([TestSymbol(0)]))
+        );
     }
 
     #[test]
@@ -368,8 +386,12 @@ mod implications {
         assert!(implications.implies_test(&Sum::from([TestSymbol(1)]), &Sum::from([TestSymbol(3)])));
         assert!(implications.implies_test(&Sum::from([TestSymbol(2)]), &Sum::from([TestSymbol(3)])));
 
-        assert!(!implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(1)])));
-        assert!(!implications.implies_test(&Sum::from([TestSymbol(3)]), &Sum::from([TestSymbol(0)])));
+        assert!(
+            !implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(1)]))
+        );
+        assert!(
+            !implications.implies_test(&Sum::from([TestSymbol(3)]), &Sum::from([TestSymbol(0)]))
+        );
     }
 
     #[test]
@@ -389,7 +411,9 @@ mod implications {
         ]);
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(5)])));
 
-        assert!(!implications.implies_test(&Sum::from([TestSymbol(2)]), &Sum::from([TestSymbol(3)])));
+        assert!(
+            !implications.implies_test(&Sum::from([TestSymbol(2)]), &Sum::from([TestSymbol(3)]))
+        );
     }
 
     #[test]
@@ -401,7 +425,9 @@ mod implications {
         ]);
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(1)])));
 
-        assert!(!implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(3)])));
+        assert!(
+            !implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(3)]))
+        );
     }
 
     #[test]
@@ -417,7 +443,9 @@ mod implications {
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(3)])));
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(1)])));
 
-        assert!(!implications.implies_test(&Sum::from([TestSymbol(3)]), &Sum::from([TestSymbol(0)])));
+        assert!(
+            !implications.implies_test(&Sum::from([TestSymbol(3)]), &Sum::from([TestSymbol(0)]))
+        );
     }
 
     #[test]
@@ -433,6 +461,8 @@ mod implications {
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(3)])));
         assert!(implications.implies_test(&Sum::from([TestSymbol(0)]), &Sum::from([TestSymbol(1)])));
 
-        assert!(!implications.implies_test(&Sum::from([TestSymbol(3)]), &Sum::from([TestSymbol(0)])));
+        assert!(
+            !implications.implies_test(&Sum::from([TestSymbol(3)]), &Sum::from([TestSymbol(0)]))
+        );
     }
 }
