@@ -16,7 +16,7 @@ use std::fmt::Formatter;
 impl<'a> TryFrom<&'a str> for PrerequisiteTree {
     type Error = PrerequisiteStringError<'a>;
     fn try_from(string: &'a str) -> Result<Self, Self::Error> {
-        let mut tokens = TokenStream::from_string(string)?;
+        let mut tokens = TokenStream::try_from(string)?;
         let ret = parse_any_expr(&mut tokens);
         tokens.consume_token(&TokenKind::Eoi)?;
         ret
@@ -87,7 +87,30 @@ struct TokenStream<'a> {
 }
 
 impl<'a> TokenStream<'a> {
-    fn from_string(string: &'a str) -> Result<TokenStream<'a>, PrerequisiteStringError<'a>> {
+    fn peek_token(&self) -> Result<Token<'a>, PrerequisiteStringError<'a>> {
+        self.tokens
+            .get(self.index)
+            .cloned()
+            .ok_or(PrerequisiteStringError::EarlyEoi)
+    }
+
+    fn consume_token(&mut self, token: &TokenKind) -> Result<(), PrerequisiteStringError<'a>> {
+        let found = &self.tokens[self.index];
+        if &found.kind == token {
+            self.index += 1;
+            Ok(())
+        } else {
+            Err(PrerequisiteStringError::ExpectedToken {
+                expected: token.clone(),
+                found: found.clone(),
+            })
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a str> for TokenStream<'a> {
+    type Error = PrerequisiteStringError<'a>;
+    fn try_from(string: &'a str) -> Result<Self, Self::Error> {
         /// Replaces Token::Comma in `tokens` with the right conjunctive.
         fn de_comma<'a>(tokens: &mut [Token<'a>]) -> Result<(), PrerequisiteStringError<'a>> {
             // each paren level needs its own conjunctive token stored
@@ -119,26 +142,6 @@ impl<'a> TokenStream<'a> {
         let mut tokens = tokenize(string)?;
         de_comma(&mut tokens)?;
         Ok(TokenStream { tokens, index: 0 })
-    }
-
-    fn peek_token(&self) -> Result<Token<'a>, PrerequisiteStringError<'a>> {
-        self.tokens
-            .get(self.index)
-            .cloned()
-            .ok_or(PrerequisiteStringError::EarlyEoi)
-    }
-
-    fn consume_token(&mut self, token: &TokenKind) -> Result<(), PrerequisiteStringError<'a>> {
-        let found = &self.tokens[self.index];
-        if &found.kind == token {
-            self.index += 1;
-            Ok(())
-        } else {
-            Err(PrerequisiteStringError::ExpectedToken {
-                expected: token.clone(),
-                found: found.clone(),
-            })
-        }
     }
 }
 
@@ -192,7 +195,7 @@ impl fmt::Display for TokenKind {
     }
 }
 
-fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError> {
+fn tokenize(string: &str) -> Result<Vec<Token>, PrerequisiteStringError<'_>> {
     static TOKEN: Lazy<Regex> = Lazy::new(|| {
         Regex::new(r"^( |and|or|,|\(|\)|minimum score of WAIVE in 'Graduate Student PreReq'|minimum score of (?P<score>\d*?) in '(?P<exam>.*?)'|((?P<subj>[A-Z]{3,4}) )?(?P<num>\d{4}[A-Z]?)\*?)").unwrap()
     });
